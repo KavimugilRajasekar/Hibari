@@ -15,7 +15,7 @@ tokenizer parity or required tensors are missing.
 
 Usage:
     python hibari/scripts/verify_gguf.py --checkpoint <ckpt> \
-        --gguf hibari/models/exported/*.gguf --llama-bin <llama.cpp/build/bin> \
+        --gguf models/Koto/releases/exported/*.gguf --llama-bin <llama.cpp/build/bin> \
         --report release/inference_parity.json
 """
 
@@ -156,7 +156,7 @@ def llama_generate(bin_dir: Path, model: Path, prompt: str, n: int) -> tuple[str
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--checkpoint", required=True)
-    ap.add_argument("--tokenizer-dir", default="hibari/models/tokenizer")
+    ap.add_argument("--tokenizer-dir", default="models/Koto/tokenizer")
     ap.add_argument("--gguf", nargs="+", required=True)
     ap.add_argument("--llama-bin", required=True, help="llama.cpp build/bin directory")
     ap.add_argument("--max-new-tokens", type=int, default=48)

@@ -23,7 +23,7 @@ from hibari.data.tokenizer import HibariTokenizer
 from hibari.inference.conversation import HibariChatSession
 from hibari.training.checkpoint import load_checkpoint
 
-DEFAULT_CKPT = "hibari/models/checkpoints/koto_start/best_model.pt"
+DEFAULT_CKPT = "models/Koto/checkpoints/koto_start/best_model.pt"
 
 
 def build_session(args) -> HibariChatSession:
@@ -44,7 +44,7 @@ def build_session(args) -> HibariChatSession:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Chat with Hibari Koto")
     ap.add_argument("--checkpoint", default=DEFAULT_CKPT)
-    ap.add_argument("--tokenizer-dir", default="hibari/models/tokenizer")
+    ap.add_argument("--tokenizer-dir", default="models/Koto/tokenizer")
     ap.add_argument("--prompt", default=None, help="Single prompt; prints one reply and exits")
     ap.add_argument("--system", default=None, help="Override the system prompt")
     ap.add_argument("--temperature", type=float, default=0.5, help="0 = greedy")

@@ -116,7 +116,7 @@ def bench_torch(ckpt: str, tok_dir: str, threads: int) -> dict:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--checkpoint", required=True)
-    ap.add_argument("--tokenizer-dir", default="hibari/models/tokenizer")
+    ap.add_argument("--tokenizer-dir", default="models/Koto/tokenizer")
     ap.add_argument("--gguf", nargs="+", required=True)
     ap.add_argument("--llama-bin", required=True)
     ap.add_argument("--threads", type=int, default=4)

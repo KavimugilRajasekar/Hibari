@@ -8,8 +8,8 @@ are skipped and reported, never faked.
 
 Usage:
     python hibari/scripts/export.py \
-        --checkpoint hibari/models/checkpoints/koto_start/best_model.pt \
-        --outdir hibari/models/exported --variants f32 f16 q8_0 q4_k_m \
+        --checkpoint models/Koto/checkpoints/koto_start/best_model.pt \
+        --outdir models/Koto/releases/exported --variants f32 f16 q8_0 q4_k_m \
         --llama-quantize /path/to/llama.cpp/build/bin/llama-quantize
 """
 
@@ -104,9 +104,9 @@ def export(
 
 def main():
     ap = argparse.ArgumentParser(description="Export Hibari Koto to GGUF")
-    ap.add_argument("--checkpoint", default="hibari/models/checkpoints/koto_start/best_model.pt")
-    ap.add_argument("--tokenizer-dir", default="hibari/models/tokenizer")
-    ap.add_argument("--outdir", default="hibari/models/exported")
+    ap.add_argument("--checkpoint", default="models/Koto/checkpoints/koto_start/best_model.pt")
+    ap.add_argument("--tokenizer-dir", default="models/Koto/tokenizer")
+    ap.add_argument("--outdir", default="models/Koto/releases/exported")
     ap.add_argument("--variants", nargs="+", default=["f32", "f16", "q8_0", "q4_k_m"], choices=list(FILENAMES))
     ap.add_argument("--llama-quantize", default=None, help="Path to llama.cpp llama-quantize binary")
     ap.add_argument("--version", default="2.0")
