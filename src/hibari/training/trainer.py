@@ -13,6 +13,10 @@ Fixes over the original loop (see Docs/07_TRAINING_PIPELINE.md):
 * Training history and the run configuration are written to
   ``<output_dir>/training_history.json``.
 * Wall-clock time limit (``max_hours``) for CPU budgets.
+* Optional gradient accumulation (``gradient_accumulation_steps``): each
+  optimizer step averages the gradients of N micro-batches, so the effective
+  batch is ``batch_size * N`` without the memory cost. ``max_steps`` counts
+  optimizer steps. The default of 1 is the original behaviour.
 """
 
 from __future__ import annotations
@@ -54,6 +58,7 @@ class TrainingArgs:
     max_hours: float = 0.0
     overwrite_output_dir: bool = False
     early_stopping_patience: int = 0  # evals without improvement; 0 = disabled
+    gradient_accumulation_steps: int = 1
 
 
 def evaluate_loss(model: HibariKotoLM, dataloader: DataLoader, device: torch.device) -> Dict[str, float]:
@@ -136,22 +141,31 @@ class Trainer:
         train_iter = iter(self.train_dataloader)
         stop_reason = "max_steps"
 
-        while step < self.args.max_steps:
+        accum = max(1, int(self.args.gradient_accumulation_steps))
+
+        def next_batch():
+            nonlocal train_iter
             try:
-                batch = next(train_iter)
+                return next(train_iter)
             except StopIteration:
                 train_iter = iter(self.train_dataloader)
-                batch = next(train_iter)
+                return next(train_iter)
 
-            input_ids = batch["input_ids"].to(self.device)
-            targets = batch["targets"].to(self.device)
-
+        while step < self.args.max_steps:
             self.optimizer.zero_grad(set_to_none=True)
-            _, loss, _ = self.model(input_ids, targets=targets)
-            if loss is None or not torch.isfinite(loss):
-                pbar.write(f"Skipping non-finite loss at step {step}")
+            micro_losses: List[float] = []
+            for _ in range(accum):
+                batch = next_batch()
+                input_ids = batch["input_ids"].to(self.device)
+                targets = batch["targets"].to(self.device)
+                _, loss, _ = self.model(input_ids, targets=targets)
+                if loss is None or not torch.isfinite(loss):
+                    pbar.write(f"Skipping non-finite loss at step {step}")
+                    continue
+                (loss / accum).backward()
+                micro_losses.append(loss.item())
+            if not micro_losses:
                 continue
-            loss.backward()
             grad_norm = None
             if self.args.gradient_clip > 0:
                 grad_norm = float(torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.gradient_clip))
@@ -160,7 +174,7 @@ class Trainer:
                 self.scheduler.step()
 
             step += 1
-            window_loss += loss.item()
+            window_loss += sum(micro_losses) / len(micro_losses)
             window_steps += 1
             pbar.update(1)
 

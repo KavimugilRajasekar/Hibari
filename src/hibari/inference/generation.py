@@ -19,7 +19,7 @@ from typing import List, Optional
 import torch
 
 from hibari.data.tokenizer import HibariTokenizer
-from hibari.inference.sampling import sample_next_token
+from hibari.inference.sampling import banned_ngram_tokens, sample_next_token
 from hibari.model.llm import HibariKotoLM
 
 
@@ -46,6 +46,7 @@ def generate_tokens(
     device: str | torch.device = "cpu",
     seed: Optional[int] = None,
     prompt_ids: Optional[List[int]] = None,
+    no_repeat_ngram_size: int = 0,
 ) -> List[int]:
     """Generate new token IDs (excluding the prompt and the stop token).
 
@@ -54,6 +55,8 @@ def generate_tokens(
         temperature: 0 selects greedy decoding (deterministic).
         seed: Optional RNG seed for reproducible sampling.
         prompt_ids: Pre-tokenized prompt; overrides ``prompt`` when given.
+        no_repeat_ngram_size: if > 1, never repeat an n-gram of this size
+            within the generated reply (the prompt is not counted).
     """
     model.eval()
     token_ids = list(prompt_ids) if prompt_ids is not None else tokenizer.encode(prompt)
@@ -91,6 +94,7 @@ def generate_tokens(
                 repetition_penalty=repetition_penalty,
                 past_token_ids=new_tokens,
                 generator=generator,
+                banned_token_ids=banned_ngram_tokens(new_tokens, no_repeat_ngram_size),
             )
             if next_token in stop_ids:
                 break
@@ -115,6 +119,7 @@ def generate_text(
     repetition_penalty: float = 1.15,
     device: str | torch.device = "cpu",
     seed: Optional[int] = None,
+    no_repeat_ngram_size: int = 0,
 ) -> str:
     """Generate output text given a prompt string."""
     new_tokens = generate_tokens(
@@ -128,5 +133,6 @@ def generate_text(
         repetition_penalty=repetition_penalty,
         device=device,
         seed=seed,
+        no_repeat_ngram_size=no_repeat_ngram_size,
     )
     return tokenizer.decode(new_tokens, skip_special_tokens=True).strip()

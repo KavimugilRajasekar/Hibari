@@ -1,6 +1,6 @@
 """Sampling strategies for text generation."""
 
-from typing import List, Optional
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 import torch
 import torch.nn.functional as F
 
@@ -13,6 +13,7 @@ def sample_next_token(
     repetition_penalty: float = 1.0,
     past_token_ids: Optional[List[int]] = None,
     generator: Optional[torch.Generator] = None,
+    banned_token_ids: Optional[Iterable[int]] = None,
 ) -> int:
     """Sample next token ID from logits with temperature, top-k, top-p and repetition penalty.
 
@@ -24,8 +25,15 @@ def sample_next_token(
         repetition_penalty: penalty for previously generated tokens
         past_token_ids: list of previous token IDs
         generator: optional torch.Generator for reproducible sampling
+        banned_token_ids: tokens that must not be produced (e.g. tokens that
+            would repeat an n-gram, see ``banned_ngram_tokens``)
     """
     logits = logits.clone().float()
+
+    if banned_token_ids:
+        banned = [tid for tid in set(banned_token_ids) if 0 <= tid < logits.size(0)]
+        if banned and len(banned) < logits.size(0):
+            logits[banned] = -float("Inf")
 
     # Apply repetition penalty
     if repetition_penalty != 1.0 and past_token_ids:
@@ -65,3 +73,18 @@ def sample_next_token(
 
     next_token = torch.multinomial(probs, num_samples=1, generator=generator)
     return int(next_token.item())
+
+
+def banned_ngram_tokens(token_ids: List[int], n: int) -> Set[int]:
+    """Tokens that would complete an n-gram already present in ``token_ids``.
+
+    Standard "no repeat n-gram" blocking: if the last ``n - 1`` tokens equal
+    the first ``n - 1`` tokens of an earlier n-gram, the token that followed
+    them is banned. ``n <= 1`` disables blocking.
+    """
+    if n <= 1 or len(token_ids) < n:
+        return set()
+    seen: Dict[Tuple[int, ...], Set[int]] = {}
+    for i in range(len(token_ids) - n + 1):
+        seen.setdefault(tuple(token_ids[i : i + n - 1]), set()).add(token_ids[i + n - 1])
+    return seen.get(tuple(token_ids[len(token_ids) - n + 1 :]), set())

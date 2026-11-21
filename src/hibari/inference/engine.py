@@ -5,7 +5,7 @@ from typing import Optional
 import torch
 
 from hibari.data.tokenizer import HibariTokenizer
-from hibari.inference.conversation import HibariChatSession
+from hibari.inference.conversation import HibariChatSession, TaskResult
 from hibari.inference.generation import generate_text
 from hibari.model.config import ModelConfig
 from hibari.model.llm import HibariKotoLM
@@ -47,6 +47,12 @@ class InferenceEngine:
             device=self.device,
         )
 
+    def rewrite(self, task: str, text: str, system_prompt: Optional[str] = None) -> TaskResult:
+        """One-shot rewriting task (rephrase, correct_grammar, formal, casual,
+        shorten, simplify, polite); see ``hibari.inference.tasks``."""
+        session = self.create_chat_session(system_prompt=system_prompt)
+        return session.run_task(task, text, add_to_history=False)
+
     def generate(
         self,
         prompt: str,
@@ -56,6 +62,7 @@ class InferenceEngine:
         top_p: float = 0.9,
         repetition_penalty: float = 1.15,
         seed: Optional[int] = None,
+        no_repeat_ngram_size: int = 0,
     ) -> str:
         return generate_text(
             model=self.model,
@@ -68,4 +75,5 @@ class InferenceEngine:
             repetition_penalty=repetition_penalty,
             device=self.device,
             seed=seed,
+            no_repeat_ngram_size=no_repeat_ngram_size,
         )
