@@ -1,0 +1,55 @@
+# ─── Hibari engine repository ───
+# Koto (models/Koto) is a separate Git repository registered as a submodule;
+# its own .gitignore governs its contents. Do NOT ignore models/Koto here.
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Tests / tooling caches
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs and temporary outputs
+*.log
+outputs/
+tmp/
+
+# Model weights and generated artefacts (never belong in the engine repo)
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.gguf
+*.ckpt
+
+# Machine-specific configuration
+.env
+.env.local
+.env.*.local
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+.claude/settings.local.json

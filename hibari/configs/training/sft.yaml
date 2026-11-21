@@ -1,0 +1,10 @@
+# Hibari — Supervised Fine-Tuning Config
+learning_rate: 1.0e-4
+max_steps: 10000
+batch_size: 16
+gradient_clip: 1.0
+checkpoint_every: 1000
+use_lora: true
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05

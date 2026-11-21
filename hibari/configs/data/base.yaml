@@ -1,0 +1,5 @@
+# Hibari — Data Pipeline Config
+raw_dir: hibari/data/raw
+processed_dir: hibari/data/processed
+tokenizer_path: hibari/models/pretrained/tokenizer.json
+max_sequence_length: 2048

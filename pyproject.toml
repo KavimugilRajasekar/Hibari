@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hibari"
+version = "0.1.0"
+description = "Hibari — an LLM-Brain built from the ground up"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Kavimugil Rajasekar" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.2.0",
+    "numpy>=1.26",
+    "tqdm>=4.66",
+    "pyyaml>=6.0",
+]
+
+[project.urls]
+Homepage = "https://kavimugilrajasekar.github.io"
+Repository = "https://github.com/KavimugilRajasekar/Hibari"
+Documentation = "https://github.com/KavimugilRajasekar/Hibari/tree/main/Docs"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov",
+    "black",
+    "ruff",
+    "mypy",
+]
+notebooks = [
+    "jupyterlab",
+    "matplotlib",
+    "seaborn",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+[tool.ruff]
+line-length = 88
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
