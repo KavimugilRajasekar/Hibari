@@ -1,6 +1,60 @@
 # 20 — Changelog
 
 All notable changes to the Hibari conversational language model project are documented in this file.
+Model-specific changes to Koto are recorded in `models/Koto/CHANGELOG.md`.
+
+---
+
+## [0.2.0] — 2026-11-21: Rewriting tasks, n-gram blocking, gradient accumulation (branch `feature/koto-1.1.0`)
+
+### Added
+- **`hibari.inference.tasks`** — one task representation for training and
+  inference (`Task: <label>\nInput: <text>`, reply = rewritten text only) for
+  `rephrase`, `correct_grammar`, `formal`, `casual`, `shorten`, `simplify`,
+  `polite`; `parse_task_request` for explicit requests typed in chat;
+  `TASK_DECODING`; protected-term (numbers, times, names, technical tokens)
+  preservation checks.
+- **`HibariChatSession.run_task` / `InferenceEngine.rewrite`** returning a
+  `TaskResult`; `reply()` routes recognised rewrite requests (`route_tasks`).
+  Rewrites use only the system prompt + request, deterministic decoding,
+  seeded retries when a protected term is dropped, sentence chunking for
+  input longer than the context window, fixed replies for empty / too-long
+  input; the safety layer still checks rewrite input.
+- **`no_repeat_ngram_size`** in `sample_next_token` / `generate_tokens` /
+  `generate_text` / `InferenceEngine.generate` (default 0 = unchanged).
+- `HibariChatSession.last_stopped_on_eos`.
+- **`hibari.evaluation.metrics`** (was a stub): repetition, repeated sentence,
+  distinct-n, grammar heuristic, echo ratio, chrF-style character F-score,
+  length ratio, lead / self-introduction / AI-disclaimer detectors.
+- **`TrainingArgs.gradient_accumulation_steps`** (default 1 = unchanged);
+  verified to match a full-batch step exactly.
+- Tests: `tests/test_tasks.py`, `tests/test_metrics.py` (237 tests in total).
+
+### Documentation and layout (2026-11-21)
+- **Root `README.md` rewritten** to match the repository: engine / model
+  split and the one-way Koto → Hibari dependency, package responsibilities,
+  data-flow diagrams, a file-by-file project structure (placeholders and
+  local-only folders marked), a structuring plan (phases A–E), a
+  documentation map, and a Quick Start with working paths. Headline metrics
+  corrected to the 1.0.0 checkpoint (val loss 3.038 / ppl 20.86); test count
+  corrected (237 engine + 58 Koto).
+- `Docs/README.md` index links fixed (files are in `engine/`,
+  `architecture/` and the Koto submodule); `hibari/README.md` now describes
+  only the base configs and where everything else moved;
+  `Docs/15_API_AND_CLI_REFERENCE.md` rewritten for `scripts/engine/` and the
+  Koto scripts; stale `hibari/scripts/…`, `hibari/models/…` paths replaced
+  in the engine and Koto docs (changelogs and ADRs are left as historical
+  records).
+- **`scripts/engine/*` defaults** now point at `models/Koto/checkpoints/…`,
+  `models/Koto/tokenizer` and `models/Koto/releases/exported` (the old
+  `hibari/models/…` defaults no longer existed).
+
+### Fixed
+- `tests/test_model.py` looked for `configs/model/koto.yaml` in the engine
+  repository; the config moved to the Koto submodule. The tests now read
+  `models/Koto/configs/model/koto.yaml` and are skipped without the submodule.
+- A rewrite request longer than the context window was left-truncated
+  through its `Task:` header; it is now split at sentence boundaries.
 
 ---
 

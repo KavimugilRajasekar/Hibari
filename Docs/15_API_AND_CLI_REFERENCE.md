@@ -1,96 +1,135 @@
 # 15 — API and CLI Reference
 
-All scripts live in `hibari/scripts/`. Run them from the repository root with
-the virtual environment active (`source .venv/bin/activate`).
+There are two sets of scripts:
 
-## Data
+- **Engine tools** in `scripts/engine/` — run from the **Hibari root**.
+- **Koto tools** in `models/Koto/scripts/`, `models/Koto/training/` and
+  `models/Koto/evaluation/` — run from **`models/Koto`**. Relative paths in
+  Koto configs and flags are resolved against the Koto root, so they also
+  work from any other directory.
 
-### prepare_data.py
-Download every source, clean, window, de-duplicate and cache the base corpus.
+Activate the virtual environment first: `source .venv/bin/activate`.
+
+## Data (Koto)
+
+### scripts/prepare_data.py
+Download every source, clean, window, de-duplicate, train the tokenizer and
+cache the general corpus in `data/processed/`.
 ```bash
-python hibari/scripts/prepare_data.py --config hibari/configs/data/koto.yaml
+python scripts/prepare_data.py --config configs/data/koto.yaml
 ```
 | Flag | Default |
 |---|---|
-| `--config` | `hibari/configs/data/koto.yaml` |
+| `--config` | `configs/data/koto.yaml` |
 
-### build_finetune_mix.py
-Build a training mix from the local cache plus the current curated and
+### scripts/build_mix.py
+Build a versioned training mix from the local cache (`HF_HUB_OFFLINE=1`, no
+downloads): general conversation, curated identity / safety data, hand-written
+conversations, dialogue skills, emails and writing tasks. Evaluation prompts
+are filtered out; tasks and hand-written conversations are split into
+train / val / test by a stable hash.
+```bash
+python scripts/build_mix.py --config configs/data/koto_1.1.0.yaml
+```
+| Flag | Default | Meaning |
+|---|---|---|
+| `--config` | `configs/data/koto_1.1.0.yaml` | data mix config (`out_dir` names the output folder) |
+| `--overwrite` | off | replace an existing, non-empty `out_dir` |
+
+### scripts/build_finetune_mix.py
+Older (v3–v6) fine-tune mix builder from the local cache plus curated and
 writing-help data.
 ```bash
-python hibari/scripts/build_finetune_mix.py --dst hibari/data/processed_v5 \
+python scripts/build_finetune_mix.py --dst data/processed_v5 \
   --replay 30000 --curated-repeats 4 --coedit 12000 --paradetox 6000 --smol-rewrite 5000 --polite-repeats 2
 ```
 | Flag | Default | Meaning |
 |---|---|---|
-| `--src` | `hibari/data/processed` | base cache |
-| `--dst` | `hibari/data/processed_ft` | output folder |
-| `--tokenizer-dir` | `hibari/models/tokenizer` | |
-| `--replay` | 30000 | general conversations to sample (70179 = all) |
+| `--src` | `data/processed` | base cache |
+| `--dst` | `data/processed_ft` | output folder |
+| `--tokenizer-dir` | `tokenizer` | |
+| `--replay` | 30000 | general conversations to sample |
 | `--curated-repeats` | 3 | curated set ×K |
 | `--coedit` / `--paradetox` / `--smol-rewrite` | 0 | writing-help examples to add |
 | `--polite-repeats` | 0 | hand-written polite / email set ×K |
 | `--max-seq-len` | 256 | examples longer than this + 1 are dropped |
 | `--seed` | 7 | |
 
-## Training
+## Training (Koto)
 
-### train.py
-Full training, or fine-tuning with `--checkpoint`.
+### training/train.py
+Full training, or fine-tuning from existing weights (`--checkpoint` or
+`init_checkpoint` in the training config).
 ```bash
-python hibari/scripts/train.py --model-config hibari/configs/model/koto.yaml \
-  --train-config hibari/configs/training/koto.yaml --data-cache-dir hibari/data/processed
+python training/train.py --train-config configs/training/koto_1.1.0.yaml 2>&1 | tee outputs/logs/train_1.1.0.log
 ```
 | Flag | Default |
 |---|---|
-| `--model-config` | `hibari/configs/model/koto.yaml` |
-| `--train-config` | `hibari/configs/training/koto.yaml` |
-| `--tokenizer-dir` | `hibari/models/tokenizer` |
-| `--data-cache-dir` | `hibari/data/processed` |
+| `--model-config` | `configs/model/koto.yaml` |
+| `--train-config` | `configs/training/koto.yaml` |
+| `--tokenizer-dir` | `tokenizer` |
+| `--data-cache-dir` | `data_cache_dir` from the training config, else `data/processed` |
 | `--max-steps` | from config |
 | `--checkpoint` | none (random init); a `.pt` path continues from those weights |
 
-### fine_tune.py
-Placeholder (prints a TODO). Use `train.py --checkpoint` instead.
+The run refuses to start if `output_dir` already contains `best_model.pt`
+(unless `overwrite_output_dir: true`).
 
-## Evaluation
+### training/fine_tune.py
+Placeholder. Use `train.py --checkpoint` instead.
 
-### evaluate.py
-Validation perplexity plus the held-out conversation suite.
+## Evaluation (Koto)
+
+### evaluation/evaluate_upgrade.py
+The 1.1.0 suite (`koto.evaluation.upgrade_suite`): conversation, context,
+rephrase, formal / casual, grammar, meaning preservation and robustness, in
+`unrouted` and `routed` modes, greedy and sampled, plus a stability check.
 ```bash
-python hibari/scripts/evaluate.py --checkpoint hibari/models/checkpoints/koto_v4/best_model.pt \
-  --out hibari/outputs/metrics/eval_v4
+python evaluation/evaluate_upgrade.py \
+  --checkpoint checkpoints/koto_1.1.0/best_model.pt --name koto_1.1.0 \
+  --data-dir data/processed_1.1.0 --train-file data/processed_1.1.0/train_conversations.json
+```
+| Flag | Default |
+|---|---|
+| `--checkpoint`, `--name` | required |
+| `--tokenizer-dir` | `tokenizer` |
+| `--data-dir` | none (adds a held-out loss table per source) |
+| `--train-file` | none (flags eval prompts seen in training) |
+| `--modes` | `unrouted routed` |
+| `--no-stability` | off |
+| `--out-dir` | `outputs/evaluation` |
+
+### evaluation/evaluate.py
+Validation perplexity plus the legacy held-out conversation suite
+(`koto.evaluation.suite`, 58 cases).
+```bash
+python evaluation/evaluate.py --checkpoint checkpoints/koto_start/best_model.pt --out outputs/metrics/eval_start
 ```
 | Flag | Default |
 |---|---|
 | `--checkpoint` | required |
 | `--compare` | other checkpoints to evaluate side by side |
-| `--tokenizer-dir` | `hibari/models/tokenizer` |
-| `--val` | `hibari/data/processed/val_conversations.json` |
+| `--tokenizer-dir` | `tokenizer` |
+| `--val` | `data/processed/val_conversations.json` |
 | `--val-limit` | 4000 |
-| `--out` | `release/evaluation_report` (writes `.json` and `.md`) |
+| `--out` | `outputs/evaluation/legacy_report` (writes `.json` and `.md`) |
 
-### benchmark.py
-CPU speed of the PyTorch checkpoint and of GGUF files in llama.cpp.
-| Flag | Default |
-|---|---|
-| `--checkpoint`, `--gguf …`, `--llama-bin` | required |
-| `--threads` / `--repeats` | 4 / 3 |
-| `--out` | `release/benchmarks.json` |
+### scripts/inject_synthetic_data.py
+Deprecated (v1 emoji data). Do not use.
 
-## Inference
+## Inference (engine)
 
-### generate.py
+### scripts/engine/generate.py
 Interactive multi-turn chat, or a single reply with `--prompt`. Includes the
-deterministic safety layer.
+deterministic safety layer and rewriting-task routing.
 ```bash
-python hibari/scripts/generate.py --checkpoint hibari/models/checkpoints/koto_v4/best_model.pt
-python hibari/scripts/generate.py --checkpoint … --prompt "Fix the grammar: she dont like tea"
+python scripts/engine/generate.py
+python scripts/engine/generate.py --prompt "Fix the grammar: she dont like tea"
 ```
 | Flag | Default |
 |---|---|
-| `--checkpoint` | `hibari/models/checkpoints/koto_v2/best_model.pt` |
-| `--tokenizer-dir` | `hibari/models/tokenizer` |
+| `--checkpoint` | `models/Koto/checkpoints/koto_start/best_model.pt` |
+| `--tokenizer-dir` | `models/Koto/tokenizer` |
 | `--prompt` | none (interactive) |
 | `--system` | the training system prompt |
 | `--temperature` | 0.5 (0 = greedy) |
@@ -100,49 +139,75 @@ python hibari/scripts/generate.py --checkpoint … --prompt "Fix the grammar: sh
 | `--seed` | none |
 | `--no-safety` | off |
 
-## Export and verification
+### scripts/engine/benchmark.py
+CPU speed of the PyTorch checkpoint and of GGUF files in llama.cpp.
+| Flag | Default |
+|---|---|
+| `--checkpoint`, `--gguf …`, `--llama-bin` | required |
+| `--tokenizer-dir` | `models/Koto/tokenizer` |
+| `--threads` / `--repeats` | 4 / 3 |
+| `--out` | `release/benchmarks.json` |
 
-### export.py
+## Export and verification (engine)
+
+### scripts/engine/export.py
 ```bash
-python hibari/scripts/export.py --checkpoint hibari/models/checkpoints/koto_v4/best_model.pt \
-  --outdir hibari/models/exported --variants f32 f16 q8_0 q4_k_m --llama-quantize ~/llama.cpp/llama-quantize
+python scripts/engine/export.py --variants f32 f16 q8_0 q4_k_m --llama-quantize ~/llama.cpp/build/bin/llama-quantize
 ```
 | Flag | Default |
 |---|---|
-| `--checkpoint` | `hibari/models/checkpoints/koto_v2/best_model.pt` |
-| `--tokenizer-dir` | `hibari/models/tokenizer` |
-| `--outdir` | `hibari/models/exported` |
+| `--checkpoint` | `models/Koto/checkpoints/koto_start/best_model.pt` |
+| `--tokenizer-dir` | `models/Koto/tokenizer` |
+| `--outdir` | `models/Koto/releases/exported` |
 | `--variants` | `f32 f16 q8_0 q4_k_m` |
 | `--llama-quantize` | none (Q8_0 / Q4_K_M are skipped without it) |
 | `--version` | `2.0` (GGUF `general.version`) |
 
-### verify_gguf.py
+### scripts/engine/verify_gguf.py
 Header, metadata, tensors, tokenizer parity and greedy parity against PyTorch.
 | Flag | Default |
 |---|---|
-| `--checkpoint`, `--gguf …`, `--llama-bin` | required (`--llama-bin ~/llama.cpp`) |
+| `--checkpoint`, `--gguf …`, `--llama-bin` | required (`--llama-bin ~/llama.cpp/build/bin`) |
+| `--tokenizer-dir` | `models/Koto/tokenizer` |
 | `--max-new-tokens` | 48 |
 | `--report` | `release/inference_parity.json` |
 
-### verify_llama_cpp_python.py
+### scripts/engine/verify_llama_cpp_python.py
 Re-runs the parity prompts through llama-cpp-python (`pip install llama-cpp-python`).
 | Flag | Default |
 |---|---|
 | `--parity` (report from `verify_gguf.py`), `--gguf …`, `--report` | required |
 | `--max-tokens` | 48 |
 
-### inject_synthetic_data.py
-Deprecated (v1 emoji data). Do not use.
-
 ## Python API
+
+Engine (`hibari`):
 
 ```python
 from hibari.training.checkpoint import load_checkpoint
 from hibari.data.tokenizer import HibariTokenizer
-from hibari.inference.conversation import HibariChatSession   # multi-turn chat with history trimming + safety
-from hibari.inference.generation import generate_text         # single prompt
+from hibari.inference import (
+    InferenceEngine,       # from_checkpoint(), create_chat_session(), rewrite(), generate()
+    HibariChatSession,     # multi-turn chat: history trimming, safety layer, task routing
+    TaskResult,
+    generate_text,         # single prompt
+    parse_task_request,    # detect "Rephrase: ...", "Make this formal: ..." requests
+    format_task_request,   # canonical "Task: ...\nInput: ..." form
+    TASKS,
+)
+from hibari.evaluation.metrics import *   # repetition, distinct-n, chrF, echo, grammar heuristic
 from hibari.export.gguf_export import export_to_gguf
-from hibari.data.curated import build_curated_conversations
-from hibari.data.rewrite import load_coedit, load_paradetox, load_smol_rewrite, build_polite_conversations
-from hibari.evaluation.suite import CASES, score_case
+```
+
+Koto (`koto`, importable from `models/Koto`; importing it makes `hibari`
+importable from the submodule checkout):
+
+```python
+from koto.data.curated import build_curated_conversations
+from koto.data.conversation import build_conversation_conversations
+from koto.data.dialogue_skills import build_dialogue_skill_conversations
+from koto.data.rewrite import load_coedit_rows, load_paradetox_examples, load_smol_rewrite_examples
+from koto.data.tasks import handwritten_task_examples
+from koto.evaluation.suite import CASES, score_case
+from koto.evaluation.upgrade_suite import eval_user_texts
 ```

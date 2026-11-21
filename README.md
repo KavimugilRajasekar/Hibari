@@ -19,7 +19,12 @@ Author: **[Kavimugil Rajasekar](https://kavimugilrajasekar.github.io)**
 
 Rather than fine-tuning pre-existing weights or relying on high-level prebuilt model wrappers, Hibari is implemented from foundational mathematical principles. Every core component—from Rotary Position Embeddings (RoPE), Root Mean Square Normalization (RMSNorm), and SwiGLU feed-forward networks to custom Byte-Pair Encoding (BPE), autoregressive inference engines, and native binary GGUF export—is written directly.
 
-**Hibari Koto** (`Hibari-Koto`) is the first conversational model developed and trained under the Hibari architecture. Built specifically for human-like empathetic dialogue, it has 6.16M parameters and blends multiple conversation corpora with a 4,096 BPE vocabulary and supervised fine-tuning (SFT) loss masking.
+**Hibari Koto** (`Hibari-Koto`) is the first conversational model developed and trained under the Hibari architecture. Built for friendly, empathetic dialogue and simple writing help, it has 6.16M parameters, a 4,096-token byte-level BPE vocabulary, and is trained with supervised fine-tuning (SFT) loss masking on a blend of open conversation, writing-task and hand-written datasets.
+
+The project is split into two Git repositories:
+
+- **Hibari** (this repository) — the engine: the `hibari` Python package, engine scripts, tests and engine documentation.
+- **Koto** (`models/Koto`, a Git submodule) — everything specific to the Koto model: configs, tokenizer, data builders, training and evaluation scripts, checkpoints and model documentation.
 
 ---
 
@@ -27,121 +32,303 @@ Rather than fine-tuning pre-existing weights or relying on high-level prebuilt m
 
 | Specification | Hibari Koto | Technical Context |
 |---|---|---|
-| Parent Architecture | Hibari | Decoder-only causal Transformer |
-| Model Identifier | `Hibari-Koto` | Conversational empathy specialist |
-| Trainable Parameters | **6,163,712 (~6.16 Million)** | Unconstrained CPU efficiency |
+| Parent Architecture | Hibari | Decoder-only causal Transformer (LLaMA-style) |
+| Model Identifier | `Hibari-Koto` | Friendly conversation and writing help |
+| Trainable Parameters | **6,163,712 (~6.16 Million)** | Trains and runs on a CPU |
 | Hidden Dimension (d_model) | **256** | Activation width per layer |
 | Transformer Layers | **6** | Stacked causal Transformer blocks |
-| Attention Heads | **8** | Head dimension = 32 |
+| Attention Heads | **8** | Head dimension = 32, full multi-head (no grouped KV) |
 | Feed-Forward Network | **SwiGLU (d_ff = 768)** | 3x expansion with Swish gating |
-| Position Encoding | RoPE (theta = 10,000.0) | Rotary embeddings across all heads |
+| Position Encoding | RoPE (theta = 10,000.0) | Adjacent-pair rotation (llama.cpp `ROPE_TYPE_NORM`) |
 | Normalization | Pre-RMSNorm (eps = 1e-5) | Scale-invariant layer normalization |
-| Vocabulary Size | **4,096 tokens** | Byte-level BPE, eliminates token fragmentation |
-| Max Context Window | 256 tokens | Dynamic causal triangular mask |
-| Weight Tying | Enabled | token_embeddings.weight tied to lm_head |
-| Training Objective | **SFT Target Masking (`targets = -100`)** | Masks prompt/user turns to focus solely on assistant |
-| Training Corpus | **4 Datasets Blended (40,214 convs)** | BST + DailyDialog + Prosocial-Dialog + OASST1 |
-| Validation Loss | **4.2939** | Evaluated on multi-turn validation split |
-| Validation Perplexity | **73.25** | Stable convergence across expanded 4k vocab |
-| Export Formats | **GGUF (FP32 & FP16)** | Native llama.cpp and Ollama compatibility |
-| Binary File Size | **27.65 MB (FP32) / 13.90 MB (FP16)** | Compact, immediate edge deployment |
+| Vocabulary Size | **4,096 tokens** | Byte-level BPE with 7 chat special tokens |
+| Max Context Window | **256 tokens** | Includes the system prompt, history and the reply |
+| Weight Tying | Enabled | `lm_head` shares the token embedding matrix |
+| Training Objective | **SFT target masking (`targets = -100`)** | Loss on assistant tokens only |
+| Training Data (1.1.0 mix) | **108,850 training conversations** | Open dialogue corpora, writing-task corpora and hand-written Koto data — see [Dataset Catalog](models/Koto/docs/16_DATASET_CATALOG.md) |
+| Validation Loss / Perplexity | **3.038 / 20.86** | Koto 1.0.0 (`koto_start`), best checkpoint at step 11,000 of 12,000 |
+| Export Formats | **GGUF: F32, F16, Q8_0, Q4_K_M** | llama.cpp and Ollama (output parity verified against PyTorch) |
+| GGUF File Size | **24.8 MB (F32) / 12.5 MB (F16) / 6.7 MB (Q8_0) / 4.0 MB (Q4_K_M)** | Small enough for any laptop |
+
+> Koto **1.1.0** is in development and is being trained on the 1.1.0 data mix.
+> The numbers above are for the released **1.0.0** model; they will be
+> updated only after the 1.1.0 run has finished and been evaluated.
 
 ---
 
-## Directory Structure
+## How the Project Is Organised
+
+Hibari is built as **two layers that live in two Git repositories**:
+
+| Layer | Repository | What it is | Knows about the other? |
+|---|---|---|---|
+| **Engine** | `Hibari` (this repo) | A reusable, model-agnostic Python package (`hibari`) that can build, train, run, evaluate and export *any* model of this architecture | **No.** The engine never imports Koto. |
+| **Model** | `Koto` (`models/Koto`, Git submodule) | One concrete model: its configs, tokenizer, data recipes, training runs, evaluation suites, checkpoints and release files | **Yes.** Koto imports `hibari` and only *uses* it. |
+
+The dependency goes one way only, **Koto → Hibari**. Because of that, a
+second model (for example a larger "Koto-M" or a new model) can be added as
+another submodule under `models/` without changing the engine, and an engine
+improvement reaches every model at once.
+
+### Inside the engine: one package per responsibility
 
 ```
-Hibari/
-├── README.md                           # Main project documentation and overview
-├── hibari.jpeg                         # Official Hibari project logo
-├── CONTRIBUTING.md                     # Contribution workflow and guidelines
-├── LICENSE                             # MIT License (Copyright 2026 Kavimugil Rajasekar)
-├── pyproject.toml                      # Build metadata, dependencies, and test paths
-├── .gitignore                          # Git tracking exclusions
-│
-├── Docs/                               # Project technical documentation and ADRs
-│   ├── README.md                       # Documentation catalog
-│   ├── 01_PROJECT_OVERVIEW.md          # Project vision and scope
-│   ├── 02_PROJECT_GOALS.md             # Concrete goals and milestones
-│   ├── 03_SYSTEM_ARCHITECTURE.md       # High-level architecture specification
-│   ├── 04_MODEL_DESIGN.md              # Mathematical formulation of Transformer blocks
-│   ├── 05_DATA_PIPELINE.md             # Dataset acquisition and pipeline
-│   ├── 06_TOKENIZER_DESIGN.md          # Custom Byte-level BPE tokenizer design
-│   ├── 07_TRAINING_PIPELINE.md         # Optimization and training loop mechanics
-│   ├── 08_FINE_TUNING.md               # SFT and LoRA fine-tuning roadmap
-│   ├── 09_EVALUATION_AND_TESTING.md    # Automated testing and validation metrics
-│   ├── 10_INFERENCE_AND_GENERATION.md  # Sampling algorithms and generation engine
-│   ├── 11_MEMORY_AND_CONTEXT.md        # Long-term memory and context design
-│   ├── 12_MODEL_EXPORT_AND_QUANTIZATION.md # GGUF serialization and quantization
-│   ├── 13_OLLAMA_INTEGRATION.md        # Local Ollama deployment guide
-│   ├── 14_CONFIGURATION_REFERENCE.md   # Configuration schema reference
-│   ├── 15_API_AND_CLI_REFERENCE.md     # Command-line interface reference
-│   ├── 16_DATASET_CATALOG.md           # Training data provenance and analysis
-│   ├── 17_MODEL_CARD.md                # Hibari Koto model card
-│   ├── 18_KNOWN_LIMITATIONS.md         # Documented limitations and planned mitigations
-│   └── decisions/                      # Architecture Decision Records (ADRs)
-│       ├── 0001_USE_PYTORCH.md         # ADR 1: Selection of PyTorch
-│       ├── 0002_PRETRAINED_VS_FROM_SCRATCH.md # ADR 2: Building from mathematical scratch
-│       └── 0003_MODEL_EXPORT_FORMAT.md # ADR 3: Standardizing on GGUF format
-│
-├── Studies/                            # Machine learning & transformer study curriculum
-│   ├── README.md                       # Curriculum index and learning tracks
-│   ├── 01_MATHEMATICS/                 # Linear algebra, calculus, probability
-│   ├── 02_NEURAL_NETWORKS/             # Perceptrons, backprop, optimizers
-│   ├── 03_DEEP_LEARNING/               # PyTorch mechanics, autograd, dataloaders
-│   ├── 04_LANGUAGE_MODELS/             # Language modeling, BPE, perplexity
-│   ├── 05_TRANSFORMERS/                # Attention, RoPE, RMSNorm, SwiGLU
-│   ├── 06_LARGE_LANGUAGE_MODELS/       # Pretraining, SFT, LoRA, quantization
-│   ├── 07_DATA_AND_PERSONALITY/        # Persona design, conversational tone, empathy
-│   ├── 08_MODEL_DEPLOYMENT/            # Checkpoints, GGUF, llama.cpp, Ollama
-│   ├── 09_EXPERIMENTS/                 # Experiment tracking logs and templates
-│   ├── REFERENCES/                     # Annotated papers, books, glossary
-│   └── assets/                         # SVG technical architectural diagrams
-│
-└── hibari/                             # Hibari core package, configs, models, and CLI
-    ├── README.md                       # Source package documentation
-    ├── configs/                        # YAML configuration files
-    │   ├── data/                       # Data configs (base, koto)
-    │   ├── model/                      # Model configs (base, koto)
-    │   ├── training/                   # Trainer hyperparameters (base, koto, sft)
-    │   └── inference/                  # Sampling parameters (base, koto)
-    ├── data/                           # Training data partitions
-    │   ├── raw/                        # Raw downloaded dataset partition (train.parquet)
-    │   ├── interim/                    # Cleaned corpora (placeholder)
-    │   ├── processed/                  # Preprocessed tensors (placeholder)
-    │   └── evaluation/                 # Evaluation benchmarks (placeholder)
-    ├── models/                         # Model weights and artifacts
-    │   ├── checkpoints/                # PyTorch checkpoints (best_model.pt, final_model.pt)
-    │   ├── tokenizer/                  # BPE files (tokenizer.json, tokenizer_config.json)
-    │   ├── exported/                   # GGUF binaries (Hibari-Koto-*.gguf)
-    │   ├── pretrained/                 # Base weights (placeholder)
-    │   └── adapters/                   # LoRA adapters (placeholder)
-    ├── notebooks/                      # Exploratory notebooks (scaffolding)
-    ├── outputs/                        # Output logs, metrics, and generated samples
-    ├── scripts/                        # Production CLI scripts
-    │   ├── prepare_data.py             # Download dataset and train BPE tokenizer
-    │   ├── train.py                    # Pretrain Hibari Koto model
-    │   ├── generate.py                 # Interactive terminal chat & generation
-    │   ├── evaluate.py                 # Validation loss and perplexity evaluation
-    │   ├── export.py                   # PyTorch checkpoint to GGUF converter
-    │   └── fine_tune.py                # SFT CLI stub (future roadmap)
-    ├── src/hibari/                     # Reusable Python library
-    │   ├── model/                      # Attention, RoPE, Pre-RMSNorm, SwiGLU, LLM
-    │   ├── data/                       # Tokenizer wrapper, dataset, collator, formatter
-    │   ├── training/                   # Trainer, loss functions, optimizer, lr scheduler
-    │   ├── inference/                  # Autoregressive engine, sampling, chat session
-    │   ├── export/                     # GGUF binary writer and tensor mapping
-    │   ├── utils/                      # Configuration, seed, device helpers
-    │   ├── memory/                     # Context management stubs (future roadmap)
-    │   └── personality/                # Persona and safety stubs (future roadmap)
-    └── tests/                          # Automated Pytest suite (13 passing tests)
-        ├── test_model.py               # Config, parameter count, forward pass, generation
-        ├── test_tokenizer.py           # BPE training, encoding, chat formatting
-        ├── test_dataset.py             # Data collator and dataset formatting
-        ├── test_inference.py           # Greedy, temperature sampling, chat session
-        ├── test_export.py              # GGUF binary structure and header tests
-        └── test_training.py            # Trainer instantiation tests
+                         ┌──────────────────────────── hibari (engine) ────────────────────────────┐
+                         │                                                                          │
+ raw text ─▶ data ───────┼─▶ tokenizer · chat template · dataset (SFT masking) · collator           │
+                         │        │                                                                 │
+                         │        ▼                                                                 │
+                         │   model ─────── ModelConfig · RoPE · attention + KV cache · RMSNorm ·    │
+                         │        │        SwiGLU · HibariKotoLM                                    │
+                         │        ▼                                                                 │
+                         │   training ──── Trainer · AdamW · cosine schedule · checkpoints          │
+                         │        │                                                                 │
+                         │        ▼                                                                 │
+ user message ───────────┼─▶ inference ─── safety layer ─▶ task router ─▶ chat session ─▶ sampling   │──▶ reply
+                         │        │                                                                 │
+                         │        ├─▶ evaluation ── response metrics (repetition, chrF, echo, …)    │
+                         │        └─▶ export ────── GGUF writer / reader ──────────────────────────┼──▶ llama.cpp / Ollama
+                         └──────────────────────────────────────────────────────────────────────────┘
 ```
+
+| Package | Responsibility | Depends on |
+|---|---|---|
+| `hibari.model` | The neural network only — no data, no training, no I/O | `torch` |
+| `hibari.data` | Turning text into training tensors and the chat template | `model` (config only), `tokenizers` |
+| `hibari.training` | Optimisation loop, schedules, checkpoint files | `model`, `data` |
+| `hibari.inference` | Everything at chat time: safety, task routing, history, decoding | `model`, `data` |
+| `hibari.evaluation` | Model-independent scoring of generated text | nothing (pure Python) |
+| `hibari.export` | Converting checkpoints to GGUF and reading them back | `model`, `data`, `gguf` |
+| `hibari.memory`, `hibari.personality`, `hibari.utils` | Reserved for planned features (placeholders) | — |
+
+### Inside Koto: the model's recipe
+
+```
+configs/  ──▶  scripts/prepare_data.py ──▶ data/processed/        (download corpora, train tokenizer)
+                       │
+koto/data/* ─▶ scripts/build_mix.py ──────▶ data/processed_1.1.0/  (mix + filter + split, no downloads)
+                       │
+               training/train.py ─────────▶ checkpoints/<run>/     (uses hibari.training)
+                       │
+               evaluation/evaluate_upgrade.py ─▶ outputs/evaluation/ (uses hibari.inference + koto.evaluation)
+                       │
+               ../../scripts/engine/export.py ─▶ releases/exported/*.gguf ─▶ Ollama
+```
+
+---
+
+## Detailed Project Structure
+
+Legend: **[placeholder]** = file exists but is not implemented yet ·
+**[local]** = exists only on your machine, never committed ·
+numbers in `( )` are lines of code.
+
+```
+Hibari/                                          ══ ENGINE REPOSITORY ══
+│
+├── README.md                                    This file: overview, architecture, structure, quick start
+├── CONTRIBUTING.md                              Branching, commit and test workflow
+├── LICENSE                                      MIT License
+├── pyproject.toml                               Package `hibari` 0.2.0; dependencies; pytest / black / ruff settings
+├── .gitignore                                   Ignores weights, GGUFs, data, logs, venvs
+├── .gitmodules                                  Registers models/Koto as a submodule
+├── hibari.jpeg                                  Project logo
+│
+├── src/hibari/                                  ── THE ENGINE PACKAGE ──
+│   ├── __init__.py                     (23)     Package version and top-level exports
+│   ├── __main__.py                      (7)     `python -m hibari` entry point
+│   │
+│   ├── model/                                   Neural network architecture
+│   │   ├── config.py                   (75)     ModelConfig dataclass, YAML load/save, parameter estimate
+│   │   ├── embedding.py                (66)     Token embedding; RoPE frequency tables and rotation
+│   │   ├── attention.py               (116)     Multi-head causal attention, KV cache, SDPA fast path
+│   │   ├── normalization.py            (20)     RMSNorm (computed in fp32)
+│   │   ├── transformer.py              (65)     SwiGLU FFN and the pre-norm Transformer block
+│   │   └── llm.py                     (205)     HibariKotoLM: embeddings → N blocks → norm → tied LM head
+│   │
+│   ├── data/                                    Text → training tensors
+│   │   ├── tokenizer.py               (161)     Byte-level BPE (train/load/save), special tokens, chat template
+│   │   ├── formatting.py              (221)     Per-corpus formatters, text cleaning, default system prompt
+│   │   ├── dataset.py                 (121)     ConversationDataset with SFT loss masking (assistant-only loss)
+│   │   ├── collator.py                 (81)     Right-padding collator; length-grouped batch sampler
+│   │   └── preprocessing.py             (1)     [placeholder]
+│   │
+│   ├── training/                                Optimisation
+│   │   ├── trainer.py                 (244)     Training loop: eval, early stopping, time limit, grad accumulation
+│   │   ├── optimizer.py                (35)     AdamW with weight decay on matrices only
+│   │   ├── scheduler.py                (26)     Linear warmup + cosine decay
+│   │   ├── loss.py                     (30)     Causal LM loss, perplexity
+│   │   ├── checkpoint.py               (70)     Save / safe-load checkpoints (weights_only=True)
+│   │   └── fine_tuning.py               (1)     [placeholder] LoRA (planned)
+│   │
+│   ├── inference/                               Chat-time pipeline
+│   │   ├── engine.py                   (79)     InferenceEngine: from_checkpoint, chat sessions, rewrite, generate
+│   │   ├── conversation.py            (311)     HibariChatSession: history trimming, safety, task routing, cleanup
+│   │   ├── generation.py              (138)     KV-cached autoregressive decoding, stop tokens, context budget
+│   │   ├── sampling.py                 (90)     Temperature, top-k, top-p, repetition penalty, n-gram blocking
+│   │   ├── safety.py                  (295)     Rule-based self-harm / violence / harmful-request layer
+│   │   └── tasks.py                   (204)     Rewriting tasks: canonical format, request parser, term checks
+│   │
+│   ├── evaluation/
+│   │   ├── metrics.py                 (120)     Repetition, distinct-n, chrF, echo, length, lead / disclaimer checks
+│   │   ├── evaluator.py                 (1)     [placeholder]
+│   │   └── benchmarks.py                (1)     [placeholder]
+│   │
+│   ├── export/
+│   │   ├── gguf_export.py             (218)     Checkpoint → self-contained GGUF (llama architecture, F32/F16)
+│   │   ├── gguf_reference.py          (104)     NumPy reference runtime that runs a GGUF for parity tests
+│   │   ├── quantization.py             (28)     FP16 conversion, size statistics
+│   │   └── checkpoint_export.py         (1)     [placeholder]
+│   │
+│   ├── memory/            context.py · retrieval.py · store.py           [placeholder] long-term memory (planned)
+│   ├── personality/       profile.py · instructions.py · safety.py       [placeholder] persona profiles (planned)
+│   └── utils/             config.py · device.py · logging.py · reproducibility.py   [placeholder]
+│
+├── scripts/engine/                              ── ENGINE TOOLS (run from the Hibari root) ──
+│   ├── generate.py                     (88)     Interactive chat or one reply (--prompt)
+│   ├── export.py                      (118)     Export F32 / F16, then Q8_0 / Q4_K_M via llama-quantize
+│   ├── verify_gguf.py                 (241)     GGUF vs PyTorch: metadata, tokenizer and greedy-output parity
+│   ├── verify_llama_cpp_python.py      (65)     Same parity check through llama-cpp-python
+│   └── benchmark.py                   (140)     Tokens/second for PyTorch and GGUF variants
+│
+├── tests/                                       ── ENGINE TESTS (pytest, 237 tests) ──
+│   ├── conftest.py                     (14)     Shared fixtures
+│   ├── test_model.py                  (163)     Shapes, parameter count, causality, KV-cache parity
+│   ├── test_tokenizer.py               (37)     BPE training, encoding, chat template
+│   ├── test_dataset.py                (133)     Formatting, SFT masking, collator
+│   ├── test_training.py               (172)     Loss masking, optimisation, eval, checkpoints
+│   ├── test_inference.py              (274)     Sampling, generation, EOS, context, chat sessions, safety
+│   ├── test_tasks.py                  (239)     Task format, request parsing, term preservation, chunking
+│   ├── test_metrics.py                 (88)     Metrics; gradient accumulation equivalence
+│   ├── test_export.py                  (31)     GGUF header basics
+│   └── test_gguf_export_comprehensive.py (689)  Full GGUF structure, tokenizer and reference-runtime parity
+│
+├── hibari/configs/                              Engine base templates: model/ training/ (base, sft) data/ inference/
+│
+├── Docs/                                        ── ENGINE DOCUMENTATION ──
+│   ├── README.md                                Index of all docs (engine + Koto)
+│   ├── engine/                                  01 Overview · 02 Goals · 10 Inference · 11 Memory · 12 Export
+│   ├── architecture/                            03 System architecture · 04 Model design · 06 Tokenizer design
+│   ├── decisions/                               ADRs 0001–0005 (PyTorch, from scratch, GGUF, multi-dataset, writing help)
+│   ├── 15_API_AND_CLI_REFERENCE.md              Every script flag and the Python API
+│   └── 20_CHANGELOG.md                          Engine changelog
+│
+└── models/Koto/                                 ══ KOTO MODEL REPOSITORY (submodule) ══
+    ├── README.md · MODEL_CARD.md · CHANGELOG.md · LICENSE
+    │
+    ├── configs/
+    │   ├── model/koto.yaml                      Architecture (6 layers, d_model 256, 8 heads, 4,096 vocab)
+    │   ├── data/koto.yaml                       Corpus download + tokenizer settings (prepare_data.py)
+    │   ├── data/koto_1.1.0.yaml                 The 1.1.0 training mix (build_mix.py)
+    │   ├── training/koto.yaml                   1.0.0 full run
+    │   ├── training/koto_continue.yaml          1.0.0 continuation
+    │   ├── training/koto_1.1.0.yaml             1.1.0 full run from scratch (12k steps, max 6 h)
+    │   ├── training/koto_1.1.0_ft.yaml          1.1.0 as a fine-tune of 1.0.0
+    │   └── inference/koto.yaml                  Sampling defaults
+    │
+    ├── tokenizer/                               tokenizer.json, tokenizer_config.json (4,096 tokens)
+    │
+    ├── koto/                                    ── KOTO PYTHON PACKAGE ──
+    │   ├── __init__.py                 (22)     Makes the engine importable from the submodule checkout
+    │   ├── paths.py                    (24)     Default folders; resolves relative paths against the Koto root
+    │   ├── data/
+    │   │   ├── curated.py             (626)     Identity, personality, hostility and safety conversations
+    │   │   ├── conversation.py        (387)     Small talk, explanations, multi-turn learning / problem chains
+    │   │   ├── dialogue_skills.py     (417)     Context recall, clarification, honest limits, chat vs correction
+    │   │   ├── tasks.py               (668)     Rewriting-task data in the canonical task format
+    │   │   └── rewrite.py             (297)     CoEdIT, ParaDetox, smol-rewrite loaders; polite set; emails
+    │   └── evaluation/
+    │       ├── suite.py               (180)     Legacy held-out suite (58 cases) and scoring helpers
+    │       └── upgrade_suite.py       (345)     1.1.0 suite: conversation, context, rewriting, robustness
+    │
+    ├── scripts/
+    │   ├── prepare_data.py            (290)     Download corpora, clean, de-duplicate, train tokenizer
+    │   ├── build_mix.py               (308)     Build a versioned mix: filter eval prompts, hash split, stats
+    │   ├── build_finetune_mix.py      (117)     Older v3–v6 fine-tune mixes
+    │   └── inject_synthetic_data.py   (277)     Deprecated (v1); kept for history
+    │
+    ├── training/
+    │   ├── train.py                   (305)     Full training or fine-tuning; records run metadata
+    │   └── fine_tune.py                (11)     [placeholder]
+    │
+    ├── evaluation/
+    │   ├── evaluate_upgrade.py        (293)     1.1.0 suite report: routed/unrouted, greedy/sampled, stability
+    │   └── evaluate.py                (248)     Validation perplexity + legacy suite report
+    │
+    ├── tests/                                   ── KOTO TESTS (pytest, 58 tests) ──
+    │   ├── test_upgrade.py            (218)     1.1.0 data, suite and training entry point
+    │   └── test_evaluation.py          (83)     Eval prompts are held out of training; metric helpers
+    │
+    ├── docs/                                    05 Data · 07 Training · 08 Fine-tuning · 09 Evaluation ·
+    │                                            13 Ollama · 14 Configuration · 16 Datasets · 18 Limitations
+    ├── notebooks/                               01 dataset exploration · 02 tokenizer · 03 model · 04 training analysis
+    ├── releases/
+    │   ├── Modelfile                            Ollama template (chat template, stop tokens, parameters)
+    │   └── exported/                            [local] Hibari-Koto-{F32,F16,Q8_0,Q4_K_M}.gguf + Modelfile
+    ├── data/                                    [local] raw/ interim/ processed/ processed_1.1.0/ evaluation/
+    ├── checkpoints/                             [local] koto_start/ (1.0.0), koto_1.1.0/ (in training), adapters/
+    ├── outputs/                                 evaluation/ (reports), metrics/, logs/, samples/
+    └── archive/                                 [local] experiment records from before the current start point
+```
+
+---
+
+## Structuring Plan
+
+The plan for turning Hibari into a fully structured, release-ready project.
+Status reflects the repository as of 2026-11-21.
+
+### Phase A — Consistency (current)
+- [x] Engine / model split into two repositories with a one-way dependency (Koto → Hibari)
+- [x] Engine tools in `scripts/engine/`; model tools inside Koto
+- [x] Documentation split to match the code, with one shared numbering (01–20)
+- [x] README, Docs index, CLI reference and script defaults point at the real paths
+- [ ] Commit the `feature/koto-1.1.0` work and the Koto submodule changes in logical commits
+
+### Phase B — Packaging
+- [ ] Add `tokenizers` to the core dependencies and `gguf` as an `export` extra in `pyproject.toml`
+- [ ] Give Koto its own `pyproject.toml` that depends on `hibari`, instead of the path hack in `koto/__init__.py`
+- [ ] One command-line entry point per repository (`hibari generate|export|verify`, `koto prepare|build|train|evaluate`)
+
+### Phase C — Quality gates
+- [ ] GitHub Actions: run `pytest` and `ruff` on both repositories for every pull request
+- [ ] Fix the known inference / training issues (special-token injection in user text, token-weighted gradient accumulation, `reset()` keeping a custom system prompt)
+- [ ] Type-check the engine with `mypy`
+
+### Phase D — Clean the placeholders
+- [ ] Implement or remove `memory/`, `personality/`, `utils/`, `evaluation/evaluator.py`, `evaluation/benchmarks.py`, `export/checkpoint_export.py`, `data/preprocessing.py`, `training/fine_tuning.py`, Koto `training/fine_tune.py`
+- [ ] Mark anything that stays as experimental in its docstring and in this README
+
+### Phase E — Releases
+- [ ] One branch per model version (`release/<version>`), tags for released checkpoints
+- [ ] Each release ships: GGUF files, Modelfile, evaluation report, model card and changelog entry
+- [ ] Host released GGUFs outside Git (e.g. GitHub Releases or Hugging Face) and link them from the model card
+
+
+---
+
+## Documentation
+
+Documentation is split the same way as the code: **how the engine works**
+lives in this repository under `Docs/`, and **how the Koto model is built,
+trained and evaluated** lives in the Koto submodule under `models/Koto/docs/`.
+Files keep one shared number sequence (01–20) across both places, so a number
+always means the same topic.
+
+| Where | What it covers | Files |
+|---|---|---|
+| `Docs/engine/` | Project scope and the engine's runtime | [01 Project Overview](Docs/engine/01_PROJECT_OVERVIEW.md), [02 Project Goals](Docs/engine/02_PROJECT_GOALS.md), [10 Inference and Generation](Docs/engine/10_INFERENCE_AND_GENERATION.md), [11 Memory and Context](Docs/engine/11_MEMORY_AND_CONTEXT.md), [12 Model Export and Quantization](Docs/engine/12_MODEL_EXPORT_AND_QUANTIZATION.md) |
+| `Docs/architecture/` | How the model and tokenizer are designed | [03 System Architecture](Docs/architecture/03_SYSTEM_ARCHITECTURE.md), [04 Model Design](Docs/architecture/04_MODEL_DESIGN.md), [06 Tokenizer Design](Docs/architecture/06_TOKENIZER_DESIGN.md) |
+| `Docs/decisions/` | Architecture Decision Records — *why* things are the way they are | [ADR index](Docs/decisions/README.md) (0001–0005) |
+| `Docs/` (top level) | References and history | [15 API and CLI Reference](Docs/15_API_AND_CLI_REFERENCE.md), [20 Changelog](Docs/20_CHANGELOG.md), [Docs index](Docs/README.md) |
+| `models/Koto/docs/` | Koto data, training, evaluation, deployment | [05 Data Pipeline](models/Koto/docs/05_DATA_PIPELINE.md), [07 Training Pipeline](models/Koto/docs/07_TRAINING_PIPELINE.md), [08 Fine-Tuning](models/Koto/docs/08_FINE_TUNING.md), [09 Evaluation and Testing](models/Koto/docs/09_EVALUATION_AND_TESTING.md), [13 Ollama Integration](models/Koto/docs/13_OLLAMA_INTEGRATION.md), [14 Configuration Reference](models/Koto/docs/14_CONFIGURATION_REFERENCE.md), [16 Dataset Catalog](models/Koto/docs/16_DATASET_CATALOG.md), [18 Known Limitations](models/Koto/docs/18_KNOWN_LIMITATIONS.md) |
+| `models/Koto/` (top level) | Model identity and history | [17 Model Card](models/Koto/MODEL_CARD.md), [Koto Changelog](models/Koto/CHANGELOG.md), [Koto README](models/Koto/README.md) |
+
+**Where to put a new document:** a change to the `hibari` package goes in
+`Docs/` (engine or architecture); a new design decision gets an ADR in
+`Docs/decisions/`; anything about Koto's data, training runs, evaluation
+results or release goes in `models/Koto/docs/`. Engine changes are logged in
+`Docs/20_CHANGELOG.md`, model changes in `models/Koto/CHANGELOG.md`.
 
 ---
 
@@ -155,10 +342,10 @@ RMSNorm(x) = (x / sqrt(mean(x^2) + epsilon)) * gamma
 ```
 
 ### 2. Rotary Position Embeddings (RoPE)
-Instead of adding absolute positional embeddings to token representations, RoPE applies a rotation to pairs of dimensions in query and key vectors proportional to token position. Relative distances between tokens are naturally injected into attention dot products without learned position tables.
+Instead of adding absolute positional embeddings to token representations, RoPE applies a rotation to pairs of dimensions in query and key vectors proportional to token position. Relative distances between tokens are naturally injected into attention dot products without learned position tables. Hibari rotates adjacent pairs `(x0, x1), (x2, x3), ...`, which is the layout llama.cpp uses for the `llama` architecture, so exported weights need no permutation.
 
 ### 3. Multi-Head Causal Self-Attention
-Queries, keys, and values are linearly projected across 4 attention heads ($d_k = 32$). An upper-triangular causal mask prevents tokens from attending to subsequent tokens in the sequence:
+Queries, keys, and values are linearly projected across 8 attention heads ($d_k = 32$). A causal mask prevents tokens from attending to later tokens. During generation a KV cache stores past keys and values, so each new token costs one forward step instead of re-running the whole sequence:
 
 ```
 Attention(Q, K, V) = softmax((Q K^T) / sqrt(d_k) + M_causal) V
@@ -168,11 +355,11 @@ Attention(Q, K, V) = softmax((Q K^T) / sqrt(d_k) + M_causal) V
 SwiGLU replaces traditional two-layer feed-forward networks with gated linear units driven by the Swish (SiLU) activation function:
 
 ```
-SwiGLU(x) = (x W_gate * SiLU(x W_up)) W_down
+SwiGLU(x) = (SiLU(x W_gate) * (x W_up)) W_down
 ```
 
 ### 5. Weight Tying
-To minimize memory usage and parameter count on edge devices, the output projection matrix (`lm_head.weight`) shares parameters directly with the input embedding table (`token_embeddings.weight`).
+To minimize memory usage and parameter count on edge devices, the output projection matrix (`lm_head.weight`) shares parameters directly with the input embedding table (`embed_tokens.embedding.weight`).
 
 ---
 
@@ -180,134 +367,130 @@ To minimize memory usage and parameter count on edge devices, the output project
 
 ### 1. Environment Setup
 
-Create and activate an isolated Python virtual environment:
-
 ```bash
+git clone --recurse-submodules https://github.com/KavimugilRajasekar/Hibari.git
+cd Hibari
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e .
-pip install datasets tokenizers gguf pytest
+pip install -e ".[dev]"
+pip install datasets tokenizers gguf
 ```
 
-### 2. Prepare Dataset and Train Tokenizer
+(`tokenizers` is needed by the tokenizer and `gguf` by the exporter; they are
+not yet listed in `pyproject.toml`.)
 
-Download the conversation datasets and prepare the Byte-level BPE tokenizer (vocabulary size: 4,096):
+All Koto commands below are run from the Koto folder:
 
 ```bash
-python hibari/scripts/prepare_data.py --config hibari/configs/data/koto.yaml
+cd models/Koto
 ```
 
-Artifacts produced:
-- `hibari/models/tokenizer/tokenizer.json`
-- `hibari/models/tokenizer/tokenizer_config.json`
+### 2. Prepare Data and Tokenizer
+
+Download the conversation corpora, train the BPE tokenizer and cache the general corpus:
+
+```bash
+python scripts/prepare_data.py --config configs/data/koto.yaml
+```
+
+Build the Koto 1.1.0 training mix (reads the local cache only, no downloads):
+
+```bash
+python scripts/build_mix.py --config configs/data/koto_1.1.0.yaml
+# add --overwrite to replace an existing data/processed_1.1.0
+```
 
 ### 3. Train Hibari Koto
 
-Train the model on CPU using AdamW with cosine learning rate decay and linear warmup:
-
 ```bash
-python hibari/scripts/train.py \
-  --model-config hibari/configs/model/koto.yaml \
-  --train-config hibari/configs/training/koto.yaml
+python training/train.py --train-config configs/training/koto_1.1.0.yaml 2>&1 | tee outputs/logs/train_1.1.0.log
 ```
 
-Saved checkpoints:
-- `hibari/models/checkpoints/best_model.pt`
-- `hibari/models/checkpoints/final_model.pt`
+Checkpoints are written to `checkpoints/koto_1.1.0/` (`best_model.pt`,
+`final_model.pt`, `last_checkpoint.pt`, `training_history.json`). The trainer
+refuses to overwrite an existing `best_model.pt`.
 
-### 4. Interactive Chat & Text Generation
+### 4. Chat with the Model
 
-Run multi-turn interactive conversation in the terminal:
+From the engine root (`cd ../..`):
 
 ```bash
-python hibari/scripts/generate.py \
-  --checkpoint hibari/models/checkpoints/best_model.pt \
-  --tokenizer hibari/models/tokenizer
+python scripts/engine/generate.py \
+  --checkpoint models/Koto/checkpoints/koto_start/best_model.pt \
+  --tokenizer-dir models/Koto/tokenizer
 ```
 
-Or generate a single response:
+Single reply:
 
 ```bash
-python hibari/scripts/generate.py \
-  --checkpoint hibari/models/checkpoints/best_model.pt \
+python scripts/engine/generate.py \
+  --checkpoint models/Koto/checkpoints/koto_start/best_model.pt \
+  --tokenizer-dir models/Koto/tokenizer \
   --prompt "Hello Hibari, how are you today?"
 ```
 
-### 5. Evaluate Model Perplexity
+### 5. Evaluate
 
-Evaluate validation loss and perplexity across the held-out test split:
+From `models/Koto`:
 
 ```bash
-python hibari/scripts/evaluate.py \
-  --checkpoint hibari/models/checkpoints/best_model.pt \
-  --tokenizer hibari/models/tokenizer
+python evaluation/evaluate_upgrade.py \
+  --checkpoint checkpoints/koto_start/best_model.pt --name koto_1.0.0 \
+  --data-dir data/processed_1.1.0 --train-file data/processed_1.1.0/train_conversations.json
 ```
 
-Current evaluation results:
-- **Validation Loss**: `3.5354`
-- **Validation Perplexity**: `34.31`
+Reports are written to `outputs/evaluation/` (Markdown and JSON). The 1.0.0
+baseline is in `outputs/evaluation/koto_1.0.0_baseline.md`.
 
-### 6. Export to GGUF (for llama.cpp and Ollama)
+### 6. Export to GGUF (llama.cpp and Ollama)
 
-Convert PyTorch weights into binary GGUF format:
+From the engine root:
 
 ```bash
-# Export F32, F16, Q8_0 and Q4_K_M (Q8_0/Q4_K_M need llama.cpp's llama-quantize)
-python hibari/scripts/export.py \
-  --checkpoint hibari/models/checkpoints/koto_v2/best_model.pt \
-  --outdir release \
+python scripts/engine/export.py \
+  --checkpoint models/Koto/checkpoints/koto_start/best_model.pt \
+  --tokenizer-dir models/Koto/tokenizer \
+  --outdir models/Koto/releases/exported \
   --variants f32 f16 q8_0 q4_k_m \
   --llama-quantize /path/to/llama.cpp/build/bin/llama-quantize
 ```
 
-Deploying with Ollama (the Modelfile lives in `release/`, next to the GGUF files):
+Deploy with Ollama:
 
 ```bash
-cd release
+cd models/Koto/releases/exported
 ollama create hibari-koto -f Modelfile
 ollama run hibari-koto
 ```
 
-See [Docs/13_OLLAMA_INTEGRATION.md](Docs/13_OLLAMA_INTEGRATION.md) for the template and parameters.
+The Python safety layer is **not** part of the GGUF; under Ollama only the
+behaviour learned in training applies. See
+[13 Ollama Integration](models/Koto/docs/13_OLLAMA_INTEGRATION.md).
 
-### 7. Run Test Suite
-
-Run the automated test suite verifying all modules:
+### 7. Run the Tests
 
 ```bash
-pytest
+pytest                               # engine tests (from the repository root)
+cd models/Koto && pytest tests       # Koto tests
 ```
 
-Output:
-```
-13 passed in 2.60s
-```
-
----
-
-## Detailed Technical Documentation
-
-For an in-depth breakdown of every stage of implementation, refer to:
-- [Docs/03_SYSTEM_ARCHITECTURE.md](Docs/03_SYSTEM_ARCHITECTURE.md): System modularity and data flow.
-- [Docs/04_MODEL_DESIGN.md](Docs/04_MODEL_DESIGN.md): Detailed mathematical formulation.
-- [Docs/12_MODEL_EXPORT_AND_QUANTIZATION.md](Docs/12_MODEL_EXPORT_AND_QUANTIZATION.md): GGUF serialization internals.
-- [Docs/17_MODEL_CARD.md](Docs/17_MODEL_CARD.md): Hibari Koto model card and intended use.
-- [Docs/18_KNOWN_LIMITATIONS.md](Docs/18_KNOWN_LIMITATIONS.md): Limitations and planned mitigations.
+Current results: **237 passed** (engine) and **58 passed** (Koto).
 
 ---
 
 ## Project Roadmap
 
-- [x] Phase 1: Machine learning and transformer foundational studies (`Studies/`)
-- [x] Phase 2: From-scratch PyTorch architecture (RoPE, Pre-RMSNorm, SwiGLU, Causal MHA)
+- [x] Phase 1: Machine learning and transformer foundational studies
+- [x] Phase 2: From-scratch PyTorch architecture (RoPE, Pre-RMSNorm, SwiGLU, causal MHA, KV cache)
 - [x] Phase 3: Byte-level BPE tokenizer training pipeline
-- [x] Phase 4: Training pipeline on Blended Skill Talk dataset
-- [x] Phase 5: Hibari Koto model training and validation
-- [x] Phase 6: Native GGUF export (FP32, FP16) and verification
-- [x] Phase 7: Automated unit and integration testing suite (13/13 passing)
-- [ ] Phase 8: LoRA and Supervised Fine-Tuning (SFT) implementation
-- [ ] Phase 9: External memory store and retrieval integration
-- [ ] Phase 10: Multi-modal sensory extensions
+- [x] Phase 4: Multi-dataset training pipeline with SFT loss masking
+- [x] Phase 5: Hibari Koto 1.0.0 trained and evaluated
+- [x] Phase 6: GGUF export (F32, F16, Q8_0, Q4_K_M) with llama.cpp parity verification
+- [x] Phase 7: Automated test suites for the engine and Koto
+- [ ] Phase 8: Koto 1.1.0 — writing tasks, dialogue skills (training in progress)
+- [ ] Phase 9: LoRA fine-tuning
+- [ ] Phase 10: External memory store and retrieval
+- [ ] Phase 11: Multi-modal extensions
 
 ---
 

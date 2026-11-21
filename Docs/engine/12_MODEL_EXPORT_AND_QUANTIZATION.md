@@ -23,9 +23,9 @@ confirm that no permutation is needed.
 ## Export
 
 ```bash
-python hibari/scripts/export.py \
-  --checkpoint hibari/models/checkpoints/koto_v4/best_model.pt \
-  --outdir hibari/models/exported \
+python scripts/engine/export.py \
+  --checkpoint models/Koto/checkpoints/koto_v4/best_model.pt \
+  --outdir models/Koto/releases/exported \
   --variants f32 f16 q8_0 q4_k_m \
   --llama-quantize ~/llama.cpp/llama-quantize
 ```
@@ -51,7 +51,7 @@ Output names are `Hibari-Koto-<TYPE>.gguf`:
 > `export LD_LIBRARY_PATH="$LLAMA_CPP_HOME:$LD_LIBRARY_PATH"` (add it to
 > `~/.bashrc` after the `LLAMA_CPP_HOME` line).
 
-* **F32 / F16** are written by `hibari/src/hibari/export/gguf_export.py`.
+* **F32 / F16** are written by `src/hibari/export/gguf_export.py`.
   2-D weights use the requested type; 1-D RMSNorm weights are always F32.
 * **Q8_0 / Q4_K_M** are produced from the F32 file by llama.cpp's
   `llama-quantize`, the reference implementation of those formats. If it is
@@ -99,25 +99,25 @@ Chat format (training, Python, llama.cpp, Ollama):
 
 ```bash
 # header, metadata, tensors, tokenizer parity and greedy parity vs PyTorch in llama.cpp
-python hibari/scripts/verify_gguf.py --checkpoint <ckpt> --gguf hibari/models/exported/*.gguf \
-  --llama-bin ~/llama.cpp --report hibari/outputs/metrics/parity_<run>.json
+python scripts/engine/verify_gguf.py --checkpoint <ckpt> --gguf models/Koto/releases/exported/*.gguf \
+  --llama-bin ~/llama.cpp --report models/Koto/outputs/metrics/parity_<run>.json
 
 # the same prompts through llama-cpp-python (needs `pip install llama-cpp-python`)
-python hibari/scripts/verify_llama_cpp_python.py --parity hibari/outputs/metrics/parity_<run>.json \
-  --gguf hibari/models/exported/*.gguf --report hibari/outputs/metrics/llama_cpp_python_<run>.json
+python scripts/engine/verify_llama_cpp_python.py --parity models/Koto/outputs/metrics/parity_<run>.json \
+  --gguf models/Koto/releases/exported/*.gguf --report models/Koto/outputs/metrics/llama_cpp_python_<run>.json
 
 # speed
-llama-bench -m hibari/models/exported/Hibari-Koto-Q8_0.gguf -p 128 -n 64 -t 6
+llama-bench -m models/Koto/releases/exported/Hibari-Koto-Q8_0.gguf -p 128 -n 64 -t 6
 ```
 
 The test suite additionally runs a pure-NumPy reference implementation
-(`hibari/src/hibari/export/gguf_reference.py`) that reads **only** the GGUF
+(`src/hibari/export/gguf_reference.py`) that reads **only** the GGUF
 and must reproduce the PyTorch logits (F32 max abs error ~5e-6).
 
 ### Results for v4 (`koto_v4/best_model.pt`, step 11000)
 
 Measured 2026-11-21 with llama.cpp build 12580 (`36cd3aff4`) on a 12-core
-CPU. Report: `hibari/outputs/metrics/parity_v4.json`.
+CPU. Report: `models/Koto/outputs/metrics/parity_v4.json`.
 
 | File | Tokenizer parity | Greedy replies identical to PyTorch | Prompt t/s (pp128) | Generation t/s (tg64, 6 threads) |
 |---|---|---|---|---|
@@ -135,18 +135,18 @@ Modelfile.
 
 ```bash
 # interactive chat (uses the embedded chat template and default system prompt)
-llama-cli -m hibari/models/exported/Hibari-Koto-Q8_0.gguf \
+llama-cli -m models/Koto/releases/exported/Hibari-Koto-Q8_0.gguf \
   -c 256 -n 96 --temp 0.5 --top-k 25 --top-p 0.85 --repeat-penalty 1.15
 #   /regen  new answer · /clear  wipe history (do it every 4–5 turns) · /exit
 
 # one question, then exit
-llama-cli -m hibari/models/exported/Hibari-Koto-Q8_0.gguf -c 256 --temp 0 -p "who developed you?" -st
+llama-cli -m models/Koto/releases/exported/Hibari-Koto-Q8_0.gguf -c 256 --temp 0 -p "who developed you?" -st
 
 # OpenAI-compatible server (web chat at http://127.0.0.1:8080)
-llama-server -m hibari/models/exported/Hibari-Koto-Q8_0.gguf -c 256 --port 8080
+llama-server -m models/Koto/releases/exported/Hibari-Koto-Q8_0.gguf -c 256 --port 8080
 
 # raw prompt: -no-cnv is required, otherwise llama-completion aborts in the chat-template code
-llama-completion -m hibari/models/exported/Hibari-Koto-Q8_0.gguf -c 256 -n 60 --temp 0 \
+llama-completion -m models/Koto/releases/exported/Hibari-Koto-Q8_0.gguf -c 256 -n 60 --temp 0 \
   -no-cnv --no-display-prompt \
   -p $'<|system|>\nYou are Hibari Koto, a friendly and calm AI companion. Keep replies short, kind and honest.<|eos|>\n<|user|>\nwho developed you?<|eos|>\n<|assistant|>\n'
 ```

@@ -40,7 +40,7 @@ Hibari is an open-source cognitive LLM architecture and language model project d
 - Use explicit type annotations for function signatures.
 - Write docstrings for all modules, classes, and public functions.
 - Do not add emoji characters in markdown files, docstrings, or console logs.
-- Write automated tests in `hibari/tests/` for any new models, transforms, or tools.
+- Write automated tests in `tests/` (engine) or `models/Koto/tests/` (Koto) for any new models, transforms, or tools.
 
 ---
 
