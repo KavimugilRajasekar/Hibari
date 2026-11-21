@@ -81,15 +81,19 @@ from hibari.model.embedding import apply_rotary_emb, precompute_rope_freqs
 from hibari.model.normalization import RMSNorm
 from hibari.model.transformer import SwiGLU
 
-KOTO_YAML = Path(__file__).resolve().parents[1] / "configs" / "model" / "koto.yaml"
+# Koto's configs live in the Koto submodule (models/Koto) since the engine/model split.
+KOTO_YAML = Path(__file__).resolve().parents[1] / "models" / "Koto" / "configs" / "model" / "koto.yaml"
+needs_koto = pytest.mark.skipif(not KOTO_YAML.exists(), reason="Koto submodule not checked out")
 
 
+@needs_koto
 def test_koto_config_values():
     c = ModelConfig.from_yaml(KOTO_YAML)
     assert (c.vocab_size, c.max_seq_len, c.d_model, c.n_layers, c.n_heads, c.d_ff) == (4096, 256, 256, 6, 8, 768)
     assert c.tie_embeddings and c.head_dim == 32 and c.model_name == "Hibari-Koto"
 
 
+@needs_koto
 def test_koto_parameter_count_is_6163712():
     c = ModelConfig.from_yaml(KOTO_YAML)
     m = HibariKotoLM(c)
