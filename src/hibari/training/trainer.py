@@ -16,7 +16,12 @@ Fixes over the original loop (see Docs/07_TRAINING_PIPELINE.md):
 * Optional gradient accumulation (``gradient_accumulation_steps``): each
   optimizer step averages the gradients of N micro-batches, so the effective
   batch is ``batch_size * N`` without the memory cost. ``max_steps`` counts
-  optimizer steps. The default of 1 is the original behaviour.
+  optimizer steps. The default of 1 is the original behaviour. Micro-batches
+  are weighted by their number of supervised tokens, so the step equals a
+  full-batch step even when micro-batches have different token counts.
+* A micro-batch with a non-finite loss is skipped and the remaining ones are
+  re-weighted; ``max_nonfinite_steps`` consecutive steps with no usable
+  micro-batch stop the run with an error instead of looping forever.
 """
 
 from __future__ import annotations
@@ -59,6 +64,7 @@ class TrainingArgs:
     overwrite_output_dir: bool = False
     early_stopping_patience: int = 0  # evals without improvement; 0 = disabled
     gradient_accumulation_steps: int = 1
+    max_nonfinite_steps: int = 10  # consecutive all-non-finite steps before aborting
 
 
 def evaluate_loss(model: HibariKotoLM, dataloader: DataLoader, device: torch.device) -> Dict[str, float]:
@@ -151,21 +157,42 @@ class Trainer:
                 train_iter = iter(self.train_dataloader)
                 return next(train_iter)
 
+        nonfinite_steps = 0
         while step < self.args.max_steps:
             self.optimizer.zero_grad(set_to_none=True)
+            micro = [next_batch() for _ in range(accum)]
+            n_tok = [int((b["targets"] != -100).sum().item()) for b in micro]
+            total_tok = max(1, sum(n_tok))
             micro_losses: List[float] = []
-            for _ in range(accum):
-                batch = next_batch()
+            used_tok = 0
+            for batch, n in zip(micro, n_tok):
+                if n == 0:
+                    continue
                 input_ids = batch["input_ids"].to(self.device)
                 targets = batch["targets"].to(self.device)
                 _, loss, _ = self.model(input_ids, targets=targets)
                 if loss is None or not torch.isfinite(loss):
                     pbar.write(f"Skipping non-finite loss at step {step}")
                     continue
-                (loss / accum).backward()
+                # loss is the mean over this micro-batch's n tokens; weighting by
+                # n / total gives the mean over all tokens of the step
+                (loss * (n / total_tok)).backward()
                 micro_losses.append(loss.item())
+                used_tok += n
             if not micro_losses:
+                nonfinite_steps += 1
+                if nonfinite_steps >= self.args.max_nonfinite_steps:
+                    raise RuntimeError(
+                        f"{nonfinite_steps} consecutive steps had no finite loss (step {step}); "
+                        "check the learning rate and the data."
+                    )
                 continue
+            nonfinite_steps = 0
+            if used_tok < total_tok:  # some micro-batches were skipped: re-normalise
+                scale = total_tok / used_tok
+                for p in self.model.parameters():
+                    if p.grad is not None:
+                        p.grad.mul_(scale)
             grad_norm = None
             if self.args.gradient_clip > 0:
                 grad_norm = float(torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.gradient_clip))

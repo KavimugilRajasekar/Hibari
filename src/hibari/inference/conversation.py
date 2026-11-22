@@ -34,7 +34,7 @@ from typing import Dict, List, Optional
 import torch
 
 from hibari.data.formatting import DEFAULT_SYSTEM_PROMPT
-from hibari.data.tokenizer import HibariTokenizer
+from hibari.data.tokenizer import HibariTokenizer, escape_special_tokens
 from hibari.inference.generation import generate_tokens
 from hibari.inference.safety import (
     assess_message,
@@ -90,7 +90,8 @@ class HibariChatSession:
         self.tokenizer = tokenizer
         self.device = device
         self.enable_safety = enable_safety
-        self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
+        self.base_system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
+        self.system_prompt = self.base_system_prompt
         if persona:
             self.system_prompt = f"{self.system_prompt} {persona}"
         self.messages: List[Dict[str, str]] = [
@@ -123,14 +124,17 @@ class HibariChatSession:
             while turns and turns[0]["role"] != "user" and len(turns) > 1:
                 turns = turns[1:]
         if len(ids) > budget:
-            # A single very long user message: keep the template head (system)
-            # and the most recent tokens of the message.
-            head = self.tokenizer.encode(
-                self.tokenizer.apply_chat_template(system)
-            )
-            tail_budget = budget - len(head)
-            if tail_budget >= 8:
-                ids = head + ids[-tail_budget:]
+            # A single very long user message: keep the system turn and the
+            # user header, the most recent tokens of the message, and the
+            # end-of-turn + assistant header, so the model still sees a
+            # well-formed user turn.
+            last = turns[-1] if turns else {"role": "user", "content": ""}
+            head = self.tokenizer.encode(self.tokenizer.apply_chat_template(system) + "<|user|>\n")
+            tail = self.tokenizer.encode("<|eos|>\n<|assistant|>\n")
+            content = self.tokenizer.encode(escape_special_tokens(last.get("content", "").strip()))
+            keep = budget - len(head) - len(tail)
+            if keep >= 8:
+                ids = head + content[-keep:] + tail
             else:  # pathological: even the system prompt does not fit
                 ids = ids[-budget:]
         return ids
@@ -167,6 +171,7 @@ class HibariChatSession:
             return response
 
         prompt_ids = self.build_prompt_ids(max_new_tokens)
+        gen_stats: Dict = {}
         new_ids = generate_tokens(
             model=self.model,
             tokenizer=self.tokenizer,
@@ -180,8 +185,9 @@ class HibariChatSession:
             device=self.device,
             seed=seed,
             no_repeat_ngram_size=no_repeat_ngram_size,
+            stats=gen_stats,
         )
-        self.last_stopped_on_eos = len(new_ids) < max_new_tokens
+        self.last_stopped_on_eos = gen_stats.get("stop_reason") == "stop_token"
         response = clean_response(
             self.tokenizer.decode(new_ids, skip_special_tokens=True)
         )
@@ -192,12 +198,13 @@ class HibariChatSession:
         return response
 
     def _task_candidate(self, prompt_ids: List[int], max_new: int, decoding: Dict, seed: Optional[int]) -> tuple:
+        gen_stats: Dict = {}
         new_ids = generate_tokens(
             model=self.model, tokenizer=self.tokenizer, prompt="", prompt_ids=prompt_ids,
-            max_new_tokens=max_new, device=self.device, seed=seed, **decoding,
+            max_new_tokens=max_new, device=self.device, seed=seed, stats=gen_stats, **decoding,
         )
         text = clean_response(self.tokenizer.decode(new_ids, skip_special_tokens=True), max_emojis=0)
-        return text, len(new_ids) < max_new
+        return text, gen_stats.get("stop_reason") == "stop_token"
 
     def _task_prompt(self, task: str, text: str) -> tuple:
         """(prompt_ids, max_new_tokens) for one rewrite, or None if the request
@@ -306,6 +313,11 @@ class HibariChatSession:
         return result
 
     def reset(self, new_persona: Optional[str] = None) -> None:
-        base = DEFAULT_SYSTEM_PROMPT if new_persona is None else f"{DEFAULT_SYSTEM_PROMPT} {new_persona}"
+        """Clear the history. The system prompt given to the constructor is kept;
+        ``new_persona`` (if any) is appended to it."""
+        base = self.base_system_prompt if new_persona is None else f"{self.base_system_prompt} {new_persona}"
         self.system_prompt = base
         self.messages = [{"role": "system", "content": base}]
+        self.last_safety_category = None
+        self.last_task = None
+        self.last_stopped_on_eos = None

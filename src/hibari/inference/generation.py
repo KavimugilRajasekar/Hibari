@@ -47,6 +47,7 @@ def generate_tokens(
     seed: Optional[int] = None,
     prompt_ids: Optional[List[int]] = None,
     no_repeat_ngram_size: int = 0,
+    stats: Optional[dict] = None,
 ) -> List[int]:
     """Generate new token IDs (excluding the prompt and the stop token).
 
@@ -57,6 +58,8 @@ def generate_tokens(
         prompt_ids: Pre-tokenized prompt; overrides ``prompt`` when given.
         no_repeat_ngram_size: if > 1, never repeat an n-gram of this size
             within the generated reply (the prompt is not counted).
+        stats: optional dict; ``stats["stop_reason"]`` is set to ``"stop_token"``,
+            ``"max_new_tokens"`` or ``"context_full"``.
     """
     model.eval()
     token_ids = list(prompt_ids) if prompt_ids is not None else tokenizer.encode(prompt)
@@ -79,6 +82,7 @@ def generate_tokens(
 
     stop_ids = _stop_ids(tokenizer)
     new_tokens: List[int] = []
+    stop_reason = "max_new_tokens"
 
     with torch.no_grad():
         inp = torch.tensor([token_ids], dtype=torch.long, device=device)
@@ -97,14 +101,18 @@ def generate_tokens(
                 banned_token_ids=banned_ngram_tokens(new_tokens, no_repeat_ngram_size),
             )
             if next_token in stop_ids:
+                stop_reason = "stop_token"
                 break
             new_tokens.append(next_token)
             if len(token_ids) + len(new_tokens) >= max_ctx:
+                stop_reason = "max_new_tokens" if len(new_tokens) >= max_new_tokens else "context_full"
                 break
             inp = torch.tensor([[next_token]], dtype=torch.long, device=device)
             logits, _, caches = model(inp, kv_caches=caches, use_cache=True)
             next_logits = logits[0, -1, :]
 
+    if stats is not None:
+        stats["stop_reason"] = stop_reason
     return new_tokens
 
 

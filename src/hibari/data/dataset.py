@@ -71,9 +71,21 @@ class ConversationDataset(Dataset):
             if len(token_ids) < 6:
                 continue
 
-            # Truncate if exceeds max_seq_len + 1 (for input and target shift)
-            if len(token_ids) > self.max_seq_len + 1:
-                token_ids = token_ids[: self.max_seq_len + 1]
+            # Too long for max_seq_len + 1 (input/target shift): cut after the
+            # last assistant turn that ends inside the window, so every kept
+            # assistant reply is complete and ends with <|eos|>. Only if no
+            # assistant turn ends inside the window, cut at the window edge.
+            limit = self.max_seq_len + 1
+            if len(token_ids) > limit:
+                cut = None
+                in_asst = False
+                for i, t in enumerate(token_ids[:limit]):
+                    if t == asst_id:
+                        in_asst = True
+                    elif t == eos_id and in_asst:
+                        cut = i + 1
+                        in_asst = False
+                token_ids = token_ids[:cut] if cut else token_ids[:limit]
 
             inp_ids = token_ids[:-1]
             tgt_ids = token_ids[1:]
