@@ -32,7 +32,7 @@ A change that touches both is committed in Koto first, then the submodule pointe
 | Koto runners | `models/Koto/evaluation/`, `models/Koto/scripts/`, `models/Koto/training/train.py` |
 | Experiment records | `models/Koto/experiments/EXP-NNNN.yaml` |
 | Reports | `models/Koto/outputs/evaluation/` |
-| Koto docs | `models/Koto/docs/` (behaviour spec 28, data standards 29, model template 30, reports 19, 31) |
+| Koto docs | `models/Koto/docs/` (behaviour spec 28, data standards 29, model template 30, reports 19, 31, 32) |
 
 Git-ignored, local only: `checkpoints/`, `data/processed*`, `*.gguf`, `archive/**/data`.
 
@@ -40,8 +40,10 @@ Git-ignored, local only: `checkpoints/`, `data/processed*`, `*.gguf`, `archive/*
 
 | Item | Value |
 |---|---|
-| Engine version | 0.3.0 |
+| Engine version | 0.3.1 |
 | Current Koto release | 1.1.1 (weights 1.1.0) — `configs/release/koto_1.1.1.yaml` |
-| Next Koto version | 1.2.0 — data built (`data/processed_1.2.0`), training NOT STARTED (EXP-0004) |
+| Trained, not released | 1.2.0 — `configs/release/koto_1.2.0.yaml` (EXP-0004): rewriting regression, see Koto docs/32 |
+| Next Koto version | 1.2.1 — data built (`data/processed_1.2.1`), training NOT STARTED (EXP-0005) |
+| Branches / tags | Koto `release/1.2.0` (work), `release/1.1.0`, tags `v1.1.0` `v1.1.1`; Hibari `feature/koto-1.1.0`, tag `engine-v0.3.0`; both `main` branches are behind |
 | Legacy trap | `models/Koto/releases/exported/*.gguf` hold **1.0.0** weights; use `exported/1.1.1/` |
-| Environment | Python venv `.venv`; llama.cpp binaries in `~/llama.cpp` (need `LD_LIBRARY_PATH=~/llama.cpp`); Ollama CLI installed |
+| Environment | Python venv `.venv`; llama.cpp binaries in `~/llama.cpp` (need `LD_LIBRARY_PATH=~/llama.cpp`); Ollama CLI installed (the system `ollama.service` was broken on 2026-11-22: missing `/usr/share/ollama`) |

@@ -168,3 +168,18 @@ def test_truncation_keeps_only_complete_assistant_turns(tok):
     assert ex["targets"][-1].item() == tok.eos_id
     trainable = ex["targets"][ex["targets"] != -100].tolist()
     assert trainable.count(tok.eos_id) == 1
+
+
+def test_t4_history_paths_relative_to_root(tmp_path, model, tok):
+    """0.3.1: training_history.json is committed, so it must not contain absolute local paths."""
+    import json
+    out = tmp_path / "repo" / "checkpoints" / "run"
+    texts = [[{"role": "user", "content": "hello world"}, {"role": "assistant", "content": "how are you"}]] * 4
+    ds = ConversationDataset(texts, tok, max_seq_len=32)
+    dl = DataLoader(ds, batch_size=2, collate_fn=DataCollatorForCausalLM(tok.pad_id))
+    m = HibariKotoLM(model.config)
+    opt = configure_optimizers(m, learning_rate=1e-3, weight_decay=0.0)
+    args = TrainingArgs(max_steps=1, output_dir=str(out), checkpoint_every=10, eval_every=10, log_every=1, save_best=False)
+    Trainer(m, opt, None, dl, None, args=args, path_root=tmp_path / "repo").train()
+    hist = json.loads((out / "training_history.json").read_text())
+    assert hist["args"]["output_dir"] == "checkpoints/run"

@@ -5,6 +5,21 @@ Model-specific changes to Koto are recorded in `models/Koto/CHANGELOG.md`.
 
 ---
 
+## [0.3.1] — 2026-11-22: Analyzer and critic fixes from the owner's Ollama chat
+
+### Fixed (regression tests `tests/test_conversational_layer.py::test_o1…o5`)
+- "ur really a bad guy", "you're the worst bot" were not recognised as hostile.
+- Short low-mood replies ("bad thats all", "meh") were not recognised as feelings.
+- "say my name?" when no name was given: replies that answer with Koto's own identity
+  are now penalised; "you haven't told me" is preferred (`MessageAnalysis.asks_user_fact`).
+- A reply identical to one of Koto's previous replies is penalised (`repeats_previous_reply`).
+- Third-party sympathy ("someone close to you", "for them") is penalised when the
+  user mentioned no third person.
+No false positives on "not bad thanks", "bad weather today", "that movie was bad".
+- `Trainer(path_root=...)` and Koto `train.py` record repo-relative paths in
+  `training_history.json` and the run metadata (they used to contain absolute local paths).
+  Test: `tests/test_regressions.py::test_t4_history_paths_relative_to_root`.
+
 ## [0.3.0] — 2026-11-22: Conversational layer, release profiles, development template
 
 ### Added

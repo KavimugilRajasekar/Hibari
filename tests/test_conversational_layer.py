@@ -260,3 +260,55 @@ def test_r1_rewrite_phrasings(text, task):
 @pytest.mark.parametrize("text", ["rewrite the story about dragons", "I want to improve my writing", "make this weekend fun"])
 def test_r2_chat_not_routed(text):
     assert parse_task_request(text) is None
+
+
+# ───────────── owner's Ollama chat, 2026-11-22 (development cases, not suite prompts) ─────────────
+
+def test_o1_bad_guy_is_hostile_but_bad_things_are_not():
+    assert analyze_message("ur really a bad guy !").hostile
+    assert analyze_message("you are the worst bot").hostile
+    for t in ("not bad thanks", "bad weather today", "that movie was bad"):
+        assert not analyze_message(t).hostile, t
+
+
+def test_o2_short_low_mood_reply():
+    assert analyze_message("bad thats all").emotion is Emotion.SADNESS
+    assert analyze_message("meh").emotion is Emotion.SADNESS
+    assert analyze_message("bad weather today").emotion is Emotion.NONE
+
+
+def test_o3_asks_for_a_name_never_given():
+    a = analyze_message("say my name ?")
+    assert a.asks_user_fact == "name"
+    ctx = "hi fuck ur really a bad guy !"
+    own = dict(CRITIC.judge("I'm Koto, a conversational AI.", a, ctx))
+    honest = dict(CRITIC.judge("You haven't told me your name yet. What should I call you?", a, ctx))
+    assert "user_fact:answers_with_own_identity" in own
+    assert "user_fact:admits_not_told" in honest and sum(honest.values()) > sum(own.values())
+    # once the user gave it, the rule does not apply
+    told = dict(CRITIC.judge("Your name is Sam.", a, "my name is Sam"))
+    assert not any(k.startswith("user_fact") for k in told)
+
+
+def test_o4_repeating_previous_reply_penalised():
+    a = analyze_message("bad thats all")
+    prev = "I'm sorry that happened. It's hard when someone close to you is upset with you."
+    assert "repeats_previous_reply" in dict(CRITIC.judge(prev, a, "x", previous_replies=[prev]))
+    assert "repeats_previous_reply" not in dict(CRITIC.judge("That sounds rough. What happened?", a, "x", previous_replies=[prev]))
+
+
+def test_o5_third_party_reply_without_third_party():
+    hostile = analyze_message("ur really a bad guy !")
+    r = "I'm sorry that happened. It's hard when someone close to you is upset with you."
+    assert "talks_about_third_party_not_mentioned" in dict(CRITIC.judge(r, hostile, "ur really a bad guy !"))
+    friend = analyze_message("My friend is going through a difficult time.")
+    assert "talks_about_third_party_not_mentioned" not in dict(
+        CRITIC.judge("That sounds hard, for them and for you.", friend, friend.text))
+
+
+def test_o6_repeated_question_may_get_the_same_answer(model, tok):
+    """Found by behaviour-suite case F6: the repeat penalty must not fire when the user repeats the question."""
+    s = HibariChatSession(model, tok, num_candidates=3)
+    s.reply("what is your name", seed=0, **DEC)
+    s.reply("what is your name", seed=0, **DEC)
+    assert not any(k == "repeats_previous_reply" for c in s.last_reply_info["candidates"] for k, _ in c["adjustments"])

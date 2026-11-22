@@ -38,7 +38,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import torch
 import torch.nn.functional as F
 
-from hibari.evaluation.metrics import echo_ratio, ngram_repetition, repeated_sentence, words
+from hibari.evaluation.metrics import char_ngram_f, echo_ratio, ngram_repetition, repeated_sentence, words
 from hibari.inference.intent import NEGATIVE, POSITIVE, Emotion, Intent, MessageAnalysis
 
 # ───────────────────────── reply patterns ─────────────────────────
@@ -55,6 +55,19 @@ DEESCALATE_REPLY = (r"\bsorry\b|\bfrustrat\w*|\bwhat went wrong\b|\bwhat (?:happ
                     r"|\b(?:try|trying) to (?:help|do better|fix)\b|\bdo better\b|\btell me (?:what|how)\b|\bupset\b|\bhow can i help\b|\bi'?m here\b")
 UNSURE_REPLY = (r"\b(?:don'?t know|not sure|can'?t (?:check|look|access|see|get|browse)|cannot (?:check|access|browse)|no way (?:of|to) (?:know|check)|"
                 r"don'?t have (?:access|live|real-time|current|up-to-date)|no (?:internet|live|real-time) (?:access|data|information)|weather (?:app|website|service)|check (?:a|an|the) )\b")
+# where a user states a fact about themselves (used to tell "never told" from "forgotten")
+USER_FACT_GIVEN = {
+    "name": r"\bmy name(?:'s| is)\b|\bi'?m called\b|\bcall me\b|\bi am [a-z]+\b(?=[.!,]|$)|\bthis is [a-z]+\b(?=[.!,]|$)",
+    "age": r"\bi(?:'m| am) \d+\b|\byears old\b",
+    "city": r"\bi live in\b|\bi'?m from\b|\bi am from\b",
+    "job": r"\bi work (?:as|at|in)\b|\bi(?:'m| am) an? (?:teacher|student|developer|engineer|nurse|doctor|designer)\b",
+}
+# replies written for "someone you care about is struggling", wrong when nobody was mentioned
+THIRD_PARTY_REPLY = r"\bsomeone (?:close to you|you care about|you love)\b|\bfor them\b|\bwatching someone\b|\bbeing there for them\b|\beasier for them\b"
+THIRD_PARTY_USER = (r"\b(?:my|our|his|her|their) (?:friend|family|mom|mum|dad|mother|father|brother|sister|son|daughter|wife|husband|partner|"
+                    r"boyfriend|girlfriend|cousin|uncle|aunt|grand\w+|colleague|roommate|neighbou?r|boss|manager|teacher|team|kid|child)\b|\b(?:he|she|they)\b")
+NOT_TOLD_REPLY = (r"\b(?:haven'?t (?:told|said|mentioned|shared)|didn'?t (?:tell|say|mention|share)|don'?t know (?:your|it|that)|not sure what your|"
+                  r"you (?:haven'?t|didn'?t)|what(?:'s| is) your name\?)")
 GRATEFUL_REPLY = r"\bglad (?:i|to) (?:could |was able to |can )?help\b|\byou'?re welcome\b|\bthank you\b|\bthanks\b|\bi'?m glad\b|\bglad to hear\b|\bmy pleasure\b"
 AGREE_INSULT_REPLY = r"^\W*(?:(?:yes|yeah|yep|true)\W*)?(?:i am|i'?m|yes|true|you'?re right|you are right)?\W*$|\byou(?:'re| are) (?:so )?right\b|\bi(?:'m| am) (?:so )?(?:pathetic|stupid|useless|dumb|an idiot|worthless)\b"
 INSULT_WORDS = r"\b(?:stupid|idiot|pathetic|useless|dumb|moron|loser|shut up|fuck\w*|shit|bitch|hate you)\b"
@@ -148,8 +161,12 @@ class ReplyCritic:
         self.identity_terms = {t.lower() for t in identity_terms}
         self.w = weights or CriticWeights()
 
-    def judge(self, reply: str, analysis: MessageAnalysis, context: str, stopped_on_eos: bool = True) -> List[Tuple[str, float]]:
-        """Signed adjustments (bonus > 0, penalty < 0) with the rule name."""
+    def judge(self, reply: str, analysis: MessageAnalysis, context: str, stopped_on_eos: bool = True,
+              previous_replies: Sequence[str] = ()) -> List[Tuple[str, float]]:
+        """Signed adjustments (bonus > 0, penalty < 0) with the rule name.
+
+        ``previous_replies`` are Koto's earlier replies in this conversation
+        (most recent last); repeating one of them is penalised."""
         w, out = self.w, []
         low = reply.lower().strip()
         n = len(words(reply))
@@ -184,6 +201,22 @@ class ReplyCritic:
                 out.append(("hostile:de_escalates", w.deescalate_bonus))
             else:
                 out.append(("hostile:ignores_the_user", -w.no_acknowledgement))
+
+        if re.search(THIRD_PARTY_REPLY, low) and not re.search(THIRD_PARTY_USER, user_low) and not re.search(THIRD_PARTY_USER, ctx_low[-400:]):
+            out.append(("talks_about_third_party_not_mentioned", -w.affect_mismatch / 2))
+
+        if analysis.asks_user_fact:
+            told = USER_FACT_GIVEN.get(analysis.asks_user_fact)
+            if told and not re.search(told, ctx_low):
+                # the user never said it: admitting that is right, answering with Koto's own identity is not
+                if re.search(NOT_TOLD_REPLY, low):
+                    out.append(("user_fact:admits_not_told", w.honest_limit))
+                if self.identity_terms and any(re.search(rf"\b{re.escape(t)}\b", low) for t in self.identity_terms):
+                    out.append(("user_fact:answers_with_own_identity", -w.honest_limit * 2))
+        for prev in previous_replies[-3:]:
+            if prev and (prev.strip().lower() == low or (len(words(prev)) >= 4 and char_ngram_f(reply, prev) >= 0.85)):
+                out.append(("repeats_previous_reply", -w.repetition * 1.5))
+                break
 
         if analysis.needs_live_data:
             if re.search(UNSURE_REPLY, low):

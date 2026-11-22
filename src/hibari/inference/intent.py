@@ -79,6 +79,7 @@ class MessageAnalysis:
     is_question: bool = False
     rewrite_task: Optional[str] = None
     needs_live_data: bool = False         # weather, live scores, news, prices, "right now"
+    asks_user_fact: Optional[str] = None  # "name", "age", "city", "job" when the user asks Koto about themselves
     evidence: List[str] = field(default_factory=list)
 
     @property
@@ -92,7 +93,7 @@ class MessageAnalysis:
     def to_dict(self) -> Dict[str, object]:
         return {"intent": self.intent.value, "emotion": self.emotion.value, "valence": self.valence,
                 "subject": self.subject, "hostile": self.hostile, "informal": self.informal,
-                "is_question": self.is_question, "rewrite_task": self.rewrite_task, "needs_live_data": self.needs_live_data, "evidence": self.evidence}
+                "is_question": self.is_question, "rewrite_task": self.rewrite_task, "needs_live_data": self.needs_live_data, "asks_user_fact": self.asks_user_fact, "evidence": self.evidence}
 
 
 # ───────────────────────── lexicons ─────────────────────────
@@ -126,6 +127,8 @@ _HOSTILE = [
     r"\bstfu\b|\bshut up\b|\bgo to hell\b|\bgo die\b",
     r"\byou(?:'re| are|r)? (?:so |such an? |a |an |really |fucking |the most )*(?:stupid|pathetic|useless|dumb|idiot|moron|worthless|trash|garbage|terrible|awful|annoying|lame|bad bot|loser|joke|disgrace)\b",
     r"\b(?:stupid|pathetic|useless|dumb|idiot|worthless) (?:bot|ai|machine|thing)\b",
+    r"\byou(?:'re| are|r)? (?:so |such an? |a |an |really |fucking |the )*(?:bad|worst|horrible|evil|mean|rude) (?:guy|person|bot|ai|machine|assistant|friend|one)\b",
+    r"\byou(?:'re| are|r)? (?:so |really |very )*(?:bad|horrible|evil|mean|rude|the worst)\W*$",
     r"\bi hate you\b|\byou suck\b|\bnobody likes you\b",
 ]
 _COMPLIMENT = r"\byou(?:'re| are)? (?:so |really |very )?(?:smart|clever|helpful|kind|nice|sweet|funny|awesome|amazing|great|the best|cool|cute)\b|\b(?:good|great|nice) (?:job|work|answer)\b|\bi (?:like|love) (?:you|talking to you)\b"
@@ -143,6 +146,14 @@ _LIVE_DATA = (r"\b(?:weather|forecast|temperature (?:in|at|today|tomorrow)|will 
               r"latest news|news today|today'?s news|stock price|share price|exchange rate|bitcoin price|price of \w+ (?:today|now)|"
               r"what time is it|today'?s date|what day is (?:it|today)|current (?:president|prime minister|price|score|time|news|ceo)|"
               r"right now|at the moment)\b")
+_USER_FACT = [
+    ("name", r"\b(?:what(?:'s| is| was)|say|tell me|do you (?:know|remember)|remember)\b.{0,15}\bmy name\b|\bwho am i\b"),
+    ("age", r"\b(?:how old am i|what(?:'s| is) my age)\b"),
+    ("city", r"\b(?:where (?:do i live|am i from)|which city (?:do i live in|am i from))\b"),
+    ("job", r"\bwhat (?:do i do|is my job)\b"),
+]
+# a short reply describing one's mood: "bad", "not good", "bad thats all", "meh"
+_LOW_MOOD = r"^\W*(?:(?:i'?m |i am |feeling |just |honestly )?(?:bad|not good|not great|not well|not okay|not ok|terrible|awful|horrible|meh|sad|down|lonely|tired|exhausted|stressed))(?:\W+(?:that'?s all|thats all|honestly|really|today|lately|i guess))?\W*$"
 _INFORMAL_MARK = r"\b(?:u|ur|r|wat|pls|plz|thx|idk|lol|lmao|omg|im|dont|cant|gonna|wanna|btw|rn|nvm|tmrw|cuz|bro|bruh)\b"
 
 
@@ -189,6 +200,14 @@ def analyze_message(text: str) -> MessageAnalysis:
         return a
 
     a.emotion = _emotion(norm, evidence)
+    if a.emotion is Emotion.NONE and re.search(_LOW_MOOD, norm):
+        a.emotion = Emotion.SADNESS
+        evidence.append("emotion:sadness:low-mood reply")
+    for fact, pat in _USER_FACT:
+        if re.search(pat, norm):
+            a.asks_user_fact = fact
+            evidence.append(f"asks_user_fact:{fact}")
+            break
     other = re.search(_OTHER_SUBJECT, norm)
     if a.emotion not in (Emotion.NONE, Emotion.GRIEF) and other and not re.search(r"\bi(?:'m| am| feel| was|'ve)\b", norm):
         a.subject = "other"

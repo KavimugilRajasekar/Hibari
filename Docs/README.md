@@ -2,7 +2,7 @@
 
 Documentation for the **Hibari** engine lives here. Documentation for the
 **Koto** model lives in the Koto submodule, `models/Koto/docs/`. Both use one
-shared number sequence (01–31), so each number always means the same topic.
+shared number sequence (01–32), so each number always means the same topic.
 
 ## Engine documentation (this folder)
 
@@ -55,6 +55,7 @@ shared number sequence (01–31), so each number always means the same topic.
 | [29_DATA_STANDARDS.md](../models/Koto/docs/29_DATA_STANDARDS.md) | Data quality, preprocessing, leakage prevention, validation checklist |
 | [30_KOTO_MODEL_TEMPLATE.md](../models/Koto/docs/30_KOTO_MODEL_TEMPLATE.md) | Koto's instance of the template; 1.2.0 workflow |
 | [31_KOTO_1.1.1_REPAIR_REPORT.md](../models/Koto/docs/31_KOTO_1.1.1_REPAIR_REPORT.md) | 1.1.1 audit, root causes, changes, results, readiness |
+| [32_KOTO_1.2.0_EVALUATION.md](../models/Koto/docs/32_KOTO_1.2.0_EVALUATION.md) | 1.2.0 training result vs 1.1.1; why it is not released; 1.2.1 plan |
 | [Koto CHANGELOG](../models/Koto/CHANGELOG.md) | Model changelog (1.0.0, 1.1.0) |
 
 ## Where new documents go

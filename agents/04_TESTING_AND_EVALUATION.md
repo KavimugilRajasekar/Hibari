@@ -3,8 +3,8 @@
 ## Tests (must pass before you finish)
 | Suite | Command | Count (2026-11-22) |
 |---|---|---|
-| Engine | `pytest -q` | 311 |
-| Koto | `cd models/Koto && python -m pytest -q tests` | 69 |
+| Engine | `pytest -q` | 318 |
+| Koto | `cd models/Koto && python -m pytest -q tests` | 71 |
 
 Regression tests live next to their area: `tests/test_regressions.py` (0.2.0 review bugs),
 `tests/test_conversational_layer.py` (analysis, normalisation, critic, session),

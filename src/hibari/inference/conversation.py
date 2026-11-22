@@ -258,9 +258,14 @@ class HibariChatSession:
         ctx_lp = reply_logprobs(self.model, prompt_ids, [c.token_ids for c in cands], self.device)
         gen_lp = reply_logprobs(self.model, self._generic_prompt_ids(), [c.token_ids for c in cands], self.device)
         context = " ".join(m["content"] for m in self.messages)
+        previous = [m["content"] for m in self.messages if m["role"] == "assistant"]
+        # a repeated question deserves the same answer: only penalise repeats otherwise
+        users = [re.sub(r"\W+", " ", m["content"].lower()).strip() for m in self.messages if m["role"] == "user"]
+        if users and users[-1] in users[:-1]:
+            previous = []
         for c, a, b in zip(cands, ctx_lp, gen_lp):
             c.logprob, c.generic_logprob = a, b
-            c.adjustments = self.critic.judge(c.text, analysis, context, c.stopped_on_eos)
+            c.adjustments = self.critic.judge(c.text, analysis, context, c.stopped_on_eos, previous_replies=previous)
         ranked = score_candidates(cands, self.critic.w)
         self.last_reply_info["candidates"] = [c.to_dict() for c in ranked]
         best = ranked[0]

@@ -99,8 +99,12 @@ class Trainer:
         args: Optional[TrainingArgs] = None,
         device: str | torch.device = "cpu",
         run_metadata: Optional[Dict[str, Any]] = None,
+        path_root: Optional[str | Path] = None,
     ):
+        """``path_root``: when given, paths under it are written relative to it in
+        ``training_history.json`` (the file is committed; it must not contain local paths)."""
         self.model = model.to(device)
+        self.path_root = Path(path_root).resolve() if path_root else None
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.train_dataloader = train_dataloader
@@ -126,9 +130,15 @@ class Trainer:
         return evaluate_loss(self.model, self.val_dataloader, self.device)
 
     def _write_history(self, history: List[Dict[str, Any]], best: Dict[str, Any]) -> None:
+        args = asdict(self.args)
+        if self.path_root is not None:
+            try:
+                args["output_dir"] = str(Path(args["output_dir"]).resolve().relative_to(self.path_root))
+            except ValueError:
+                pass
         with open(self.output_dir / "training_history.json", "w", encoding="utf-8") as f:
             json.dump(
-                {"args": asdict(self.args), "metadata": self.run_metadata, "best": best, "history": history},
+                {"args": args, "metadata": self.run_metadata, "best": best, "history": history},
                 f, indent=2,
             )
 
