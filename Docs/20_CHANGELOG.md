@@ -30,6 +30,24 @@ Model-specific changes to Koto are recorded in `models/Koto/CHANGELOG.md`.
   verified to match a full-batch step exactly.
 - Tests: `tests/test_tasks.py`, `tests/test_metrics.py` (237 tests in total).
 
+### Fixed (2026-11-22, code review; regression tests in `tests/test_regressions.py`)
+- **Special-token injection**: message text containing `<|assistant|>`,
+  `<|eos|>` etc. was encoded as real control tokens, letting a user forge
+  turns. `escape_special_tokens()` now neutralises them in
+  `apply_chat_template` (training data contains none, so training is unchanged).
+- `HibariChatSession.reset()` keeps the constructor's system prompt
+  (`base_system_prompt`) instead of reverting to the default.
+- `generate_tokens(..., stats=)` reports `stop_reason` (`stop_token`,
+  `max_new_tokens`, `context_full`); `last_stopped_on_eos` no longer claims
+  EOS when the context window filled.
+- The over-long-message fallback keeps the `<|user|>` and `<|assistant|>` headers.
+- Gradient accumulation is token-weighted (equal to a full-batch step for
+  any token counts); skipped non-finite micro-batches are re-weighted;
+  `max_nonfinite_steps` (default 10) stops a run that would otherwise loop forever.
+- `ConversationDataset` truncates over-long conversations after the last
+  complete assistant turn, so no kept reply loses its `<|eos|>`.
+- Tests: 247 (10 new).
+
 ### Documentation and layout (2026-11-21)
 - **Root `README.md` rewritten** to match the repository: engine / model
   split and the one-way Koto → Hibari dependency, package responsibilities,

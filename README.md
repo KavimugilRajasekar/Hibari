@@ -46,13 +46,16 @@ The project is split into two Git repositories:
 | Weight Tying | Enabled | `lm_head` shares the token embedding matrix |
 | Training Objective | **SFT target masking (`targets = -100`)** | Loss on assistant tokens only |
 | Training Data (1.1.0 mix) | **108,850 training conversations** | Open dialogue corpora, writing-task corpora and hand-written Koto data — see [Dataset Catalog](models/Koto/docs/16_DATASET_CATALOG.md) |
-| Validation Loss / Perplexity | **3.038 / 20.86** | Koto 1.0.0 (`koto_start`), best checkpoint at step 11,000 of 12,000 |
+| Validation Perplexity (open conversation) | **20.86** (1.0.0) / 22.39 (1.1.0) | Same held-out split for both; lower is better |
+| Behaviour Suite Pass Rate | 16.7 % (1.0.0) / **53.7 %** (1.1.0) | 54 held-out cases, routed, greedy — see [Development Report](models/Koto/docs/19_KOTO_1.1.0_DEVELOPMENT_REPORT.md) |
 | Export Formats | **GGUF: F32, F16, Q8_0, Q4_K_M** | llama.cpp and Ollama (output parity verified against PyTorch) |
 | GGUF File Size | **24.8 MB (F32) / 12.5 MB (F16) / 6.7 MB (Q8_0) / 4.0 MB (Q4_K_M)** | Small enough for any laptop |
 
-> Koto **1.1.0** is in development and is being trained on the 1.1.0 data mix.
-> The numbers above are for the released **1.0.0** model; they will be
-> updated only after the 1.1.0 run has finished and been evaluated.
+> **1.0.0** (`checkpoints/koto_start`) is the released model. **1.1.0**
+> (`checkpoints/koto_1.1.0`) is trained and evaluated but not yet released:
+> much better at grammar correction and rewriting, somewhat better at
+> multi-turn dialogue, slightly worse at open chit-chat, and it still
+> invents facts. GGUF files exist for 1.0.0 only.
 
 ---
 
@@ -191,7 +194,7 @@ Hibari/                                          ══ ENGINE REPOSITORY ══
 │   ├── verify_llama_cpp_python.py      (65)     Same parity check through llama-cpp-python
 │   └── benchmark.py                   (140)     Tokens/second for PyTorch and GGUF variants
 │
-├── tests/                                       ── ENGINE TESTS (pytest, 237 tests) ──
+├── tests/                                       ── ENGINE TESTS (pytest, 247 tests) ──
 │   ├── conftest.py                     (14)     Shared fixtures
 │   ├── test_model.py                  (163)     Shapes, parameter count, causality, KV-cache parity
 │   ├── test_tokenizer.py               (37)     BPE training, encoding, chat template
@@ -201,7 +204,8 @@ Hibari/                                          ══ ENGINE REPOSITORY ══
 │   ├── test_tasks.py                  (239)     Task format, request parsing, term preservation, chunking
 │   ├── test_metrics.py                 (88)     Metrics; gradient accumulation equivalence
 │   ├── test_export.py                  (31)     GGUF header basics
-│   └── test_gguf_export_comprehensive.py (689)  Full GGUF structure, tokenizer and reference-runtime parity
+│   ├── test_gguf_export_comprehensive.py (689)  Full GGUF structure, tokenizer and reference-runtime parity
+│   └── test_regressions.py            (170)     One test per bug fixed in the 2026-11 review
 │
 ├── hibari/configs/                              Engine base templates: model/ training/ (base, sft) data/ inference/
 │
@@ -255,18 +259,19 @@ Hibari/                                          ══ ENGINE REPOSITORY ══
     │   ├── evaluate_upgrade.py        (293)     1.1.0 suite report: routed/unrouted, greedy/sampled, stability
     │   └── evaluate.py                (248)     Validation perplexity + legacy suite report
     │
-    ├── tests/                                   ── KOTO TESTS (pytest, 58 tests) ──
+    ├── tests/                                   ── KOTO TESTS (pytest, 59 tests) ──
     │   ├── test_upgrade.py            (218)     1.1.0 data, suite and training entry point
     │   └── test_evaluation.py          (83)     Eval prompts are held out of training; metric helpers
     │
     ├── docs/                                    05 Data · 07 Training · 08 Fine-tuning · 09 Evaluation ·
-    │                                            13 Ollama · 14 Configuration · 16 Datasets · 18 Limitations
+    │                                            13 Ollama · 14 Configuration · 16 Datasets · 18 Limitations ·
+    │                                            19 Koto 1.1.0 development report
     ├── notebooks/                               01 dataset exploration · 02 tokenizer · 03 model · 04 training analysis
     ├── releases/
     │   ├── Modelfile                            Ollama template (chat template, stop tokens, parameters)
     │   └── exported/                            [local] Hibari-Koto-{F32,F16,Q8_0,Q4_K_M}.gguf + Modelfile
     ├── data/                                    [local] raw/ interim/ processed/ processed_1.1.0/ evaluation/
-    ├── checkpoints/                             [local] koto_start/ (1.0.0), koto_1.1.0/ (in training), adapters/
+    ├── checkpoints/                             [local] koto_start/ (1.0.0), koto_1.1.0/ (1.1.0), adapters/
     ├── outputs/                                 evaluation/ (reports), metrics/, logs/, samples/
     └── archive/                                 [local] experiment records from before the current start point
 ```
@@ -292,7 +297,7 @@ Status reflects the repository as of 2026-11-21.
 
 ### Phase C — Quality gates
 - [ ] GitHub Actions: run `pytest` and `ruff` on both repositories for every pull request
-- [ ] Fix the known inference / training issues (special-token injection in user text, token-weighted gradient accumulation, `reset()` keeping a custom system prompt)
+- [x] Fix the known inference / training issues (special-token injection in user text, token-weighted gradient accumulation, `reset()` keeping a custom system prompt, stop reason, long-message prompt, turn-boundary truncation) — with regression tests
 - [ ] Type-check the engine with `mypy`
 
 ### Phase D — Clean the placeholders
@@ -321,7 +326,7 @@ always means the same topic.
 | `Docs/architecture/` | How the model and tokenizer are designed | [03 System Architecture](Docs/architecture/03_SYSTEM_ARCHITECTURE.md), [04 Model Design](Docs/architecture/04_MODEL_DESIGN.md), [06 Tokenizer Design](Docs/architecture/06_TOKENIZER_DESIGN.md) |
 | `Docs/decisions/` | Architecture Decision Records — *why* things are the way they are | [ADR index](Docs/decisions/README.md) (0001–0005) |
 | `Docs/` (top level) | References and history | [15 API and CLI Reference](Docs/15_API_AND_CLI_REFERENCE.md), [20 Changelog](Docs/20_CHANGELOG.md), [Docs index](Docs/README.md) |
-| `models/Koto/docs/` | Koto data, training, evaluation, deployment | [05 Data Pipeline](models/Koto/docs/05_DATA_PIPELINE.md), [07 Training Pipeline](models/Koto/docs/07_TRAINING_PIPELINE.md), [08 Fine-Tuning](models/Koto/docs/08_FINE_TUNING.md), [09 Evaluation and Testing](models/Koto/docs/09_EVALUATION_AND_TESTING.md), [13 Ollama Integration](models/Koto/docs/13_OLLAMA_INTEGRATION.md), [14 Configuration Reference](models/Koto/docs/14_CONFIGURATION_REFERENCE.md), [16 Dataset Catalog](models/Koto/docs/16_DATASET_CATALOG.md), [18 Known Limitations](models/Koto/docs/18_KNOWN_LIMITATIONS.md) |
+| `models/Koto/docs/` | Koto data, training, evaluation, deployment | [05 Data Pipeline](models/Koto/docs/05_DATA_PIPELINE.md), [07 Training Pipeline](models/Koto/docs/07_TRAINING_PIPELINE.md), [08 Fine-Tuning](models/Koto/docs/08_FINE_TUNING.md), [09 Evaluation and Testing](models/Koto/docs/09_EVALUATION_AND_TESTING.md), [13 Ollama Integration](models/Koto/docs/13_OLLAMA_INTEGRATION.md), [14 Configuration Reference](models/Koto/docs/14_CONFIGURATION_REFERENCE.md), [16 Dataset Catalog](models/Koto/docs/16_DATASET_CATALOG.md), [18 Known Limitations](models/Koto/docs/18_KNOWN_LIMITATIONS.md), [19 Koto 1.1.0 Development Report](models/Koto/docs/19_KOTO_1.1.0_DEVELOPMENT_REPORT.md) |
 | `models/Koto/` (top level) | Model identity and history | [17 Model Card](models/Koto/MODEL_CARD.md), [Koto Changelog](models/Koto/CHANGELOG.md), [Koto README](models/Koto/README.md) |
 
 **Where to put a new document:** a change to the `hibari` package goes in
@@ -474,7 +479,7 @@ pytest                               # engine tests (from the repository root)
 cd models/Koto && pytest tests       # Koto tests
 ```
 
-Current results: **237 passed** (engine) and **58 passed** (Koto).
+Current results: **247 passed** (engine) and **59 passed** (Koto).
 
 ---
 
@@ -487,7 +492,7 @@ Current results: **237 passed** (engine) and **58 passed** (Koto).
 - [x] Phase 5: Hibari Koto 1.0.0 trained and evaluated
 - [x] Phase 6: GGUF export (F32, F16, Q8_0, Q4_K_M) with llama.cpp parity verification
 - [x] Phase 7: Automated test suites for the engine and Koto
-- [ ] Phase 8: Koto 1.1.0 — writing tasks, dialogue skills (training in progress)
+- [ ] Phase 8: Koto 1.1.0 — writing tasks, dialogue skills (trained and evaluated; release pending)
 - [ ] Phase 9: LoRA fine-tuning
 - [ ] Phase 10: External memory store and retrieval
 - [ ] Phase 11: Multi-modal extensions

@@ -33,6 +33,7 @@ shared number sequence (01–20), so each number always means the same topic.
 | [16_DATASET_CATALOG.md](../models/Koto/docs/16_DATASET_CATALOG.md) | Datasets used for training, with licences |
 | [17 Model Card](../models/Koto/MODEL_CARD.md) | Model card for Hibari Koto |
 | [18_KNOWN_LIMITATIONS.md](../models/Koto/docs/18_KNOWN_LIMITATIONS.md) | Known issues and limitations |
+| [19_KOTO_1.1.0_DEVELOPMENT_REPORT.md](../models/Koto/docs/19_KOTO_1.1.0_DEVELOPMENT_REPORT.md) | 1.1.0 review, fixes, training run and 1.0.0 vs 1.1.0 evaluation |
 | [Koto CHANGELOG](../models/Koto/CHANGELOG.md) | Model changelog (1.0.0, 1.1.0) |
 
 ## Where new documents go
