@@ -26,7 +26,7 @@ def main():
     ap.add_argument("--report", required=True)
     ap.add_argument("--max-tokens", type=int, default=48)
     a = ap.parse_args()
-    parity = json.loads(Path(a.parity).read_text())
+    parity = json.loads(Path(a.parity).read_text(encoding="utf-8"))
     out = {"llama_cpp_python_version": llama_cpp.__version__, "files": {}}
 
     for g in a.gguf:
@@ -57,7 +57,7 @@ def main():
             "total": len(rows), "cases": rows, "multi_turn": conv,
         }
         del llm
-    Path(a.report).write_text(json.dumps(out, indent=2, ensure_ascii=False))
+    Path(a.report).write_text(json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8")
     print(json.dumps({k: {kk: v[kk] for kk in ("chat_format", "raw_exact", "chat_exact", "total")} for k, v in out["files"].items()}, indent=1))
 
 

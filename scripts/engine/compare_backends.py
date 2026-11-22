@@ -179,7 +179,7 @@ def main() -> int:
         report["variants"][v] = vr
 
     Path(a.report).parent.mkdir(parents=True, exist_ok=True)
-    Path(a.report).write_text(json.dumps(report, indent=2, ensure_ascii=False))
+    Path(a.report).write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nReport written to {a.report}")
     return 0
 

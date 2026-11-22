@@ -213,7 +213,7 @@ def _validate_gguf(profile: ModelProfile, cfg, tok, step, modelfile_variant) -> 
     manifest = gdir / "export_manifest.json"
     if manifest.exists():
         try:
-            m = json.loads(manifest.read_text())
+            m = json.loads(manifest.read_text(encoding="utf-8"))
             if m.get("model_version") not in (None, profile.version):
                 F.append(Finding("error", "manifest", f"manifest version {m.get('model_version')} != {profile.version}"))
         except json.JSONDecodeError as e:

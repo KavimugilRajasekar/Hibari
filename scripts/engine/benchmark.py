@@ -132,7 +132,7 @@ def main():
         print(json.dumps({k: v for k, v in r.items() if k != "sample_output"}))
         res["gguf"].append(r)
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
-    Path(a.out).write_text(json.dumps(res, indent=2, ensure_ascii=False))
+    Path(a.out).write_text(json.dumps(res, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Wrote {a.out}")
 
 

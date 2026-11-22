@@ -162,7 +162,7 @@ class Trainer:
         history, best = [], {"eval_loss": float("inf"), "step": 0}
         hist_file = self.output_dir / "training_history.json"
         if hist_file.exists():
-            h = json.loads(hist_file.read_text())
+            h = json.loads(hist_file.read_text(encoding="utf-8"))
             history = [r for r in h.get("history", []) if r.get("step", 0) <= step]
             b = h.get("best") or {}
             if "eval_loss" in b and b.get("step", 0) <= step:
