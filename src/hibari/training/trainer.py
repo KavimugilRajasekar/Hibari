@@ -56,7 +56,7 @@ class TrainingArgs:
     checkpoint_every: int = 200
     eval_every: int = 100
     log_every: int = 20
-    output_dir: str = "hibari/models/checkpoints"
+    output_dir: str = "checkpoints/run"
     save_best: bool = True
     seed: int = 42
     min_lr_ratio: float = 0.1
@@ -100,11 +100,18 @@ class Trainer:
         device: str | torch.device = "cpu",
         run_metadata: Optional[Dict[str, Any]] = None,
         path_root: Optional[str | Path] = None,
+        resume_from: Optional[str | Path] = None,
     ):
         """``path_root``: when given, paths under it are written relative to it in
         ``training_history.json`` (the file is committed; it must not contain local paths)."""
         self.model = model.to(device)
         self.path_root = Path(path_root).resolve() if path_root else None
+        # resume_from: a last_checkpoint.pt written by this trainer; model, optimizer,
+        # scheduler, step, best result and history are restored and training continues
+        # to max_steps. The data stream is fast-forwarded past the batches already
+        # used, so a resumed run sees the same batches as an uninterrupted one
+        # (given the same loader / sampler seed).
+        self.resume_from = Path(resume_from) if resume_from else None
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.train_dataloader = train_dataloader
@@ -117,6 +124,7 @@ class Trainer:
             self.args.save_best
             and (self.output_dir / "best_model.pt").exists()
             and not self.args.overwrite_output_dir
+            and self.resume_from is None
         ):
             raise FileExistsError(
                 f"{self.output_dir}/best_model.pt already exists. Use a new output_dir "
@@ -142,18 +150,41 @@ class Trainer:
                 f, indent=2,
             )
 
+    def _restore(self, path: Path):
+        ck = torch.load(path, map_location=self.device, weights_only=False)
+        if "optimizer_state_dict" not in ck:
+            raise ValueError(f"{path} has no optimizer state; resume needs a last_checkpoint.pt")
+        self.model.load_state_dict(ck["model_state_dict"])
+        self.optimizer.load_state_dict(ck["optimizer_state_dict"])
+        if self.scheduler is not None and ck.get("scheduler_state_dict") is not None:
+            self.scheduler.load_state_dict(ck["scheduler_state_dict"])
+        step = int(ck.get("step", 0))
+        history, best = [], {"eval_loss": float("inf"), "step": 0}
+        hist_file = self.output_dir / "training_history.json"
+        if hist_file.exists():
+            h = json.loads(hist_file.read_text())
+            history = [r for r in h.get("history", []) if r.get("step", 0) <= step]
+            b = h.get("best") or {}
+            if "eval_loss" in b and b.get("step", 0) <= step:
+                best = {k: b[k] for k in ("eval_loss", "eval_perplexity", "step") if k in b}
+        if step >= self.args.max_steps:
+            raise ValueError(f"checkpoint is at step {step}, max_steps is {self.args.max_steps}: nothing to resume")
+        return step, history, best
+
     def train(self) -> Dict[str, Any]:
         self.model.train()
         history: List[Dict[str, Any]] = []
         best: Dict[str, Any] = {"eval_loss": float("inf"), "step": 0}
         step = 0
+        if self.resume_from is not None:
+            step, history, best = self._restore(self.resume_from)
         window_loss, window_steps = 0.0, 0
         last_train_loss = float("nan")
         evals_without_improvement = 0
         t0 = time.time()
 
         model_desc = getattr(self.model.config, "model_name", "Hibari-Koto")
-        pbar = tqdm(total=self.args.max_steps, desc=f"Training {model_desc}", mininterval=5)
+        pbar = tqdm(total=self.args.max_steps, initial=step, desc=f"Training {model_desc}", mininterval=5)
         train_iter = iter(self.train_dataloader)
         stop_reason = "max_steps"
 
@@ -166,6 +197,10 @@ class Trainer:
             except StopIteration:
                 train_iter = iter(self.train_dataloader)
                 return next(train_iter)
+
+        if step:  # resumed: skip the micro-batches the interrupted run already consumed
+            for _ in range(step * accum):
+                next_batch()
 
         nonfinite_steps = 0
         while step < self.args.max_steps:

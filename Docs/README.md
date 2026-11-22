@@ -2,7 +2,7 @@
 
 Documentation for the **Hibari** engine lives here. Documentation for the
 **Koto** model lives in the Koto submodule, `models/Koto/docs/`. Both use one
-shared number sequence (01–32), so each number always means the same topic.
+shared number sequence (01–34), so each number always means the same topic.
 
 ## Engine documentation (this folder)
 
@@ -13,6 +13,7 @@ shared number sequence (01–32), so each number always means the same topic.
 | [architecture/03_SYSTEM_ARCHITECTURE.md](architecture/03_SYSTEM_ARCHITECTURE.md) | High-level system design |
 | [architecture/04_MODEL_DESIGN.md](architecture/04_MODEL_DESIGN.md) | Model architecture decisions |
 | [architecture/06_TOKENIZER_DESIGN.md](architecture/06_TOKENIZER_DESIGN.md) | Tokenizer approach and vocabulary |
+| [architecture/34_GPT2_REFERENCE.md](architecture/34_GPT2_REFERENCE.md) | GPT-2 studied as a reference: adopted, adapted, rejected; measured results |
 | [engine/10_INFERENCE_AND_GENERATION.md](engine/10_INFERENCE_AND_GENERATION.md) | Inference engine, sampling, chat session, rewriting tasks |
 | [engine/11_MEMORY_AND_CONTEXT.md](engine/11_MEMORY_AND_CONTEXT.md) | Memory systems and context handling |
 | [engine/12_MODEL_EXPORT_AND_QUANTIZATION.md](engine/12_MODEL_EXPORT_AND_QUANTIZATION.md) | GGUF export and quantization |
@@ -56,6 +57,7 @@ shared number sequence (01–32), so each number always means the same topic.
 | [30_KOTO_MODEL_TEMPLATE.md](../models/Koto/docs/30_KOTO_MODEL_TEMPLATE.md) | Koto's instance of the template; 1.2.0 workflow |
 | [31_KOTO_1.1.1_REPAIR_REPORT.md](../models/Koto/docs/31_KOTO_1.1.1_REPAIR_REPORT.md) | 1.1.1 audit, root causes, changes, results, readiness |
 | [32_KOTO_1.2.0_EVALUATION.md](../models/Koto/docs/32_KOTO_1.2.0_EVALUATION.md) | 1.2.0 training result vs 1.1.1; why it is not released; 1.2.1 plan |
+| [33_KOTO_1.3.0_DEVELOPMENT_REPORT.md](../models/Koto/docs/33_KOTO_1.3.0_DEVELOPMENT_REPORT.md) | 1.3.0 audit, dataset selection report, conversation-first mix, tests, commands |
 | [Koto CHANGELOG](../models/Koto/CHANGELOG.md) | Model changelog (1.0.0, 1.1.0) |
 
 ## Where new documents go

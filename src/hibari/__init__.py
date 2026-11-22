@@ -1,6 +1,6 @@
 """Hibari — An LLM-Brain Architecture built from the ground up."""
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 __model_name__ = "Hibari-Koto"
 
 from hibari.data.tokenizer import HibariTokenizer

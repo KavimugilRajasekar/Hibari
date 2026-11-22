@@ -68,6 +68,14 @@ THIRD_PARTY_USER = (r"\b(?:my|our|his|her|their) (?:friend|family|mom|mum|dad|mo
                     r"boyfriend|girlfriend|cousin|uncle|aunt|grand\w+|colleague|roommate|neighbou?r|boss|manager|teacher|team|kid|child)\b|\b(?:he|she|they)\b")
 NOT_TOLD_REPLY = (r"\b(?:haven'?t (?:told|said|mentioned|shared)|didn'?t (?:tell|say|mention|share)|don'?t know (?:your|it|that)|not sure what your|"
                   r"you (?:haven'?t|didn'?t)|what(?:'s| is) your name\?)")
+ACKNOWLEDGE_VIEW_REPLY = (r"\b(?:fair (?:enough|point)|good point|i see|that'?s (?:okay|fine|fair)|you (?:might|may|could) be right|"
+                          r"why (?:do|would) you|what do you think|how do you see|i understand|interesting|tell me (?:why|more)|"
+                          r"different (?:view|opinion|ways?)|that'?s a (?:good|fair) point)\b")
+REPAIR_REPLY = (r"\b(?:sorry|my mistake|my bad|i misunderstood|what did you mean|what do you mean|could you (?:explain|clarify|say)|"
+                r"can you (?:explain|clarify|tell me)|let me try again|i see,? so)\b")
+TOPIC_CHANGE_REPLY = (r"\b(?:sure|of course|okay|ok|alright|happy to|let'?s|what would you like|what do you want|what'?s on your mind|"
+                      r"anything in mind|what else)\b")
+CONDOLENCE_REPLY = r"\bsorry for your loss\b|\bcondolences\b|\bmay (?:she|he|they) rest in peace\b"
 GRATEFUL_REPLY = r"\bglad (?:i|to) (?:could |was able to |can )?help\b|\byou'?re welcome\b|\bthank you\b|\bthanks\b|\bi'?m glad\b|\bglad to hear\b|\bmy pleasure\b"
 AGREE_INSULT_REPLY = r"^\W*(?:(?:yes|yeah|yep|true)\W*)?(?:i am|i'?m|yes|true|you'?re right|you are right)?\W*$|\byou(?:'re| are) (?:so )?right\b|\bi(?:'m| am) (?:so )?(?:pathetic|stupid|useless|dumb|an idiot|worthless)\b"
 INSULT_WORDS = r"\b(?:stupid|idiot|pathetic|useless|dumb|moron|loser|shut up|fuck\w*|shit|bitch|hate you)\b"
@@ -190,7 +198,11 @@ class ReplyCritic:
         if emo in POSITIVE and re.search(CELEBRATE_REPLY, low):
             out.append(("shares_good_news", w.empathy_bonus))
 
+        if re.search(CONDOLENCE_REPLY, low) and emo is not Emotion.GRIEF and not re.search(r"\b(?:died|passed away|death|funeral|lost my)\b", user_low):
+            out.append(("condolence_without_loss", -w.affect_mismatch))
         if analysis.hostile:
+            if re.search(POSITIVE_REPLY, low):
+                out.append(("hostile:cheerful_reply", -w.hostile_thanks))
             if re.search(GRATEFUL_REPLY, low):
                 out.append(("hostile:thanks_or_glad", -w.hostile_thanks))
             if re.search(AGREE_INSULT_REPLY, low):
@@ -232,6 +244,18 @@ class ReplyCritic:
                 out.append(("thanks_acknowledged", w.intent_bonus))
             if re.search(r"\bsorry\b", low):
                 out.append(("thanks:apologises", -w.affect_mismatch / 2))
+        if it is Intent.DISAGREEMENT:
+            if re.search(ACKNOWLEDGE_VIEW_REPLY, low):
+                out.append(("disagreement:acknowledged", w.intent_bonus))
+            if re.search(GRATEFUL_REPLY, low) or re.search(r"\bi agree\b|\byou'?re right\b", low) and len(words(reply)) < 4:
+                out.append(("disagreement:ignored", -w.no_acknowledgement))
+        if it is Intent.REPAIR:
+            if re.search(REPAIR_REPLY, low):
+                out.append(("repair:asks_or_apologises", w.intent_bonus))
+            else:
+                out.append(("repair:ignored", -w.no_acknowledgement))
+        if it is Intent.TOPIC_CHANGE and re.search(TOPIC_CHANGE_REPLY, low):
+            out.append(("topic_change:accepted", w.intent_bonus))
         if it is Intent.FAREWELL and re.search(FAREWELL_REPLY, low):
             out.append(("farewell_returned", w.intent_bonus))
         if it is Intent.IDENTITY and self.identity_terms and any(re.search(rf"\b{re.escape(t)}\b", low) for t in self.identity_terms):

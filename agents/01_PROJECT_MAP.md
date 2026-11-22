@@ -22,6 +22,9 @@ A change that touches both is committed in Koto first, then the submodule pointe
 | Rewriting tasks and request parsing | `src/hibari/inference/tasks.py` |
 | Safety layer | `src/hibari/inference/safety.py` |
 | GGUF export + reference runtime | `src/hibari/export/` |
+| Batched / streaming generation | `src/hibari/inference/generation.py` (`generate_batch`, `stream_text`) |
+| Data pipeline steps, reference BPE | `src/hibari/data/pipeline.py`, `src/hibari/data/bpe_reference.py` |
+| Loss / perplexity evaluator | `src/hibari/evaluation/evaluator.py` |
 | Release profiles, validation, Modelfile | `src/hibari/release/` |
 | Engine tools | `scripts/engine/` (export, validate_release, validate_experiments, compare_backends, generate, verify_gguf) |
 | Config templates | `hibari/configs/` |
@@ -31,8 +34,8 @@ A change that touches both is committed in Koto first, then the submodule pointe
 | Koto evaluation suites | `models/Koto/koto/evaluation/` (upgrade_suite, suite, behaviour_suite) |
 | Koto runners | `models/Koto/evaluation/`, `models/Koto/scripts/`, `models/Koto/training/train.py` |
 | Experiment records | `models/Koto/experiments/EXP-NNNN.yaml` |
-| Reports | `models/Koto/outputs/evaluation/` |
-| Koto docs | `models/Koto/docs/` (behaviour spec 28, data standards 29, model template 30, reports 19, 31, 32) |
+| Reports | `models/Koto/outputs/evaluation/`, dataset reports `models/Koto/outputs/data/` |
+| Koto docs | `models/Koto/docs/` (behaviour spec 28, data standards 29, model template 30, reports 19, 31, 32, 33) |
 
 Git-ignored, local only: `checkpoints/`, `data/processed*`, `*.gguf`, `archive/**/data`.
 
@@ -40,10 +43,10 @@ Git-ignored, local only: `checkpoints/`, `data/processed*`, `*.gguf`, `archive/*
 
 | Item | Value |
 |---|---|
-| Engine version | 0.3.1 |
+| Engine version | 0.4.0 (branch `feature/koto-1.3.0`, uncommitted) |
 | Current Koto release | 1.1.1 (weights 1.1.0) — `configs/release/koto_1.1.1.yaml` |
 | Trained, not released | 1.2.0 — `configs/release/koto_1.2.0.yaml` (EXP-0004): rewriting regression, see Koto docs/32 |
-| Next Koto version | 1.2.1 — data built (`data/processed_1.2.1`), training NOT STARTED (EXP-0005) |
-| Branches / tags | Koto `release/1.2.0` (work), `release/1.1.0`, tags `v1.1.0` `v1.1.1`; Hibari `feature/koto-1.1.0`, tag `engine-v0.3.0`; both `main` branches are behind |
+| Next Koto version | 1.3.0 — **29.4M-parameter** model (`configs/model/koto_1.3.0_large.yaml`), conversation-first data built (`data/processed_1.3.0`), training NOT STARTED (EXP-0006, `configs/training/koto_1.3.0_large.yaml`); 1.2.1 superseded |
+| Branches / tags | Koto `release/1.3.0` (local work), `release/1.2.0`, `release/1.1.0`, tags `v1.1.0` `v1.1.1`; Hibari `feature/koto-1.1.0`, tag `engine-v0.3.0`; both `main` branches are behind |
 | Legacy trap | `models/Koto/releases/exported/*.gguf` hold **1.0.0** weights; use `exported/1.1.1/` |
 | Environment | Python venv `.venv`; llama.cpp binaries in `~/llama.cpp` (need `LD_LIBRARY_PATH=~/llama.cpp`); Ollama CLI installed (the system `ollama.service` was broken on 2026-11-22: missing `/usr/share/ollama`) |

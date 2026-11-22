@@ -54,7 +54,13 @@ leak drops and per-source counts.
 
 Semantic versioning per model: **MAJOR** architecture / tokenizer / chat
 format, **MINOR** new training data or capabilities, **PATCH** inference,
-export, evaluation or compatibility repairs. A PATCH may ship the previous
+export, evaluation or compatibility repairs.
+
+*Architecture* means the layer types and their wiring, the tokenizer and the chat format —
+what decides whether the GGUF runtime, the tokenizer and the prompts still work. Changing only
+the *size* (width, depth, FFN size) within the same architecture is **MINOR** (Koto 1.3.0:
+6.16M → 29.4M). Checkpoints of different sizes are never interchangeable; the release profile
+records the model config, and `validate_release.py` rejects a checkpoint whose shape differs. A PATCH may ship the previous
 weights (`weights_version` < `version`).
 
 Every version has: a release profile (config references, checkpoint and

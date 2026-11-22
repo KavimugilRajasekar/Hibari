@@ -272,3 +272,34 @@ def test_clean_response_never_adds_content():
     assert clean_response("Great 😊😊😊 day") == "Great 😊 day"
     assert clean_response("It is fine. And then the") == "It is fine."
     assert clean_response("Hello ,  world !") == "Hello, world!"
+
+
+def test_generate_batch_rows_equal_sequential(model, tok):
+    """0.4.0: batched candidate generation (shared prompt, per-row seeds) = sequential generation."""
+    from hibari.inference.generation import generate_batch
+    prompt = tok.encode("hello")
+    decs = [dict(temperature=0.0, top_k=0, top_p=1.0, repetition_penalty=1.0)] + [dict(temperature=0.9, top_k=20, top_p=0.95, repetition_penalty=1.1)] * 4
+    seeds = [None, 1, 2, 3, 4]
+    batched = [ids for ids, _ in generate_batch(model, tok, prompt, decs, seeds, 12)]
+    seq = [generate_tokens(model, tok, "", prompt_ids=prompt, max_new_tokens=12, seed=s, **d) for d, s in zip(decs, seeds)]
+    assert batched == seq
+
+
+def test_stream_text_joins_to_full_reply(model, tok):
+    from hibari.inference.generation import stream_text
+    prompt = tok.encode("hello")
+    full = tok.decode(generate_tokens(model, tok, "", prompt_ids=prompt, max_new_tokens=15, temperature=0.0,
+                                      repetition_penalty=1.0), skip_special_tokens=True)
+    pieces = list(stream_text(model, tok, prompt, 15, temperature=0.0, repetition_penalty=1.0))
+    assert "".join(pieces) == full   # append-only: no piece is ever revised
+
+
+def test_stream_text_never_shows_half_a_character(model, tok, monkeypatch):
+    """A multi-byte character split over byte-level tokens is held back until complete."""
+    import hibari.inference.generation as gen
+    emoji_ids = tok.encode("😊")
+    assert len(emoji_ids) > 1, "tiny tokenizer should split the emoji into byte tokens"
+    script = iter(emoji_ids + [tok.eos_id])
+    monkeypatch.setattr(gen, "sample_next_token", lambda *a, **k: next(script))
+    pieces = list(gen.stream_text(model, tok, tok.encode("hello"), 10))
+    assert "".join(pieces) == "😊" and all(chr(0xFFFD) not in p for p in pieces)

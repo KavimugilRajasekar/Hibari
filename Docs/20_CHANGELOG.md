@@ -5,6 +5,43 @@ Model-specific changes to Koto are recorded in `models/Koto/CHANGELOG.md`.
 
 ---
 
+## [0.4.0] — 2026-11-22: GPT-2-informed engineering (branch `feature/koto-1.3.0`)
+
+GPT-2 studied as an engineering reference: `architecture/34_GPT2_REFERENCE.md`. Architecture,
+tokenizer IDs and checkpoints unchanged (Koto: 6,163,712 parameters).
+
+### Added
+- `generate_batch` — N continuations of one prompt in a single batch (prompt prefilled once,
+  per-row decoding and seeds); identical to sequential generation on the 1.1.1 model (16/16),
+  4.4× faster. `HibariChatSession` candidate reranking uses it (~0.4 s per turn).
+- `stream_text` and `generate.py --stream` — streaming that never shows half a UTF-8 character.
+- `hibari.data.bpe_reference.ReferenceBPE` — independent GPT-2-algorithm BPE; agrees with the
+  production tokenizer on 19,552/19,552 validation messages. Found that NFKC makes Python and
+  llama.cpp tokenise compatibility characters differently (documented, not changed).
+- `hibari.data.pipeline` — `validate_conversation`, `deduplicate`, `QualityFilter`,
+  `stable_split` (identical to Koto's `split_of`), `conversation_stats`.
+- `hibari.evaluation.evaluate_records` — token-weighted loss / perplexity overall and per source
+  (was a stub; Koto's runner now uses it and reproduces the published 1.1.0 losses exactly).
+- `ModelConfig.validate()` (runs on construction) and `ModelConfig.from_dict_strict`.
+- `Trainer(resume_from=...)` / Koto `train.py --resume`: restores weights, optimizer,
+  scheduler, step, best result and history, and fast-forwards the data stream.
+- Message analysis: `DISAGREEMENT`, `REPAIR`, `TOPIC_CHANGE` intents; past-tense bad days,
+  lost objects, "don't know what to do"; critic rules for them, for condolences without a
+  loss and for cheerful replies to insults. Router: "rewrite this in a polite way".
+
+### Fixed
+- `pyproject.toml` did not declare `tokenizers` and `gguf` although `import hibari` needs both
+  (`tests/test_packaging.py` checks every third-party import is declared).
+- `TrainingArgs.output_dir` default pointed at the removed `hibari/models/checkpoints`.
+
+### Kept on purpose
+- `HibariKotoLM.generate` (uncached, sliding window) remains as the reference implementation that
+  the KV-cache tests compare against; it has a tested contract the cached path does not have.
+- Placeholder modules `hibari.memory.{store,retrieval,context}`, `hibari.personality.*`,
+  `hibari.utils.*`, `evaluation.benchmarks`, `export.checkpoint_export`, `data.preprocessing`,
+  `training.fine_tuning` (LoRA) are still stubs; nothing imports them. Model-specific
+  conversation configuration is provided by `hibari.release.ModelProfile` + `InferenceSettings`.
+
 ## [0.3.1] — 2026-11-22: Analyzer and critic fixes from the owner's Ollama chat
 
 ### Fixed (regression tests `tests/test_conversational_layer.py::test_o1…o5`)

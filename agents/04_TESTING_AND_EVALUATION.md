@@ -15,6 +15,7 @@ Koto `tests/test_release_and_behaviour.py` (leaks, behaviour data, configs, expe
 | Suite | File | Runner |
 |---|---|---|
 | Behaviour (Phase 9: basic, empathy, context, reformulation, writing, robustness, safety, identity) | `koto/evaluation/behaviour_suite.py` | `evaluation/evaluate_behaviour.py` |
+| Conversation (1.3.0 brief prompts; spec check for the Python pipeline) | `koto/evaluation/conversation_suite.py` | `evaluation/evaluate_behaviour.py --suite conversation` |
 | Upgrade (1.1.0: conversation, rephrase, grammar, preservation, dialogue) | `koto/evaluation/upgrade_suite.py` | `evaluation/evaluate_upgrade.py` |
 | Legacy (58 cases) | `koto/evaluation/suite.py` | `evaluation/evaluate.py` |
 

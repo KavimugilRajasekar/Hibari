@@ -47,7 +47,7 @@ import torch
 
 from hibari.data.formatting import DEFAULT_SYSTEM_PROMPT
 from hibari.data.tokenizer import HibariTokenizer, escape_special_tokens
-from hibari.inference.generation import generate_tokens
+from hibari.inference.generation import generate_batch, generate_tokens
 from hibari.inference.intent import Intent, MessageAnalysis, analyze_message
 from hibari.inference.normalization import normalize_informal
 from hibari.inference.reranking import Candidate, CriticWeights, ReplyCritic, reply_logprobs, score_candidates
@@ -244,17 +244,20 @@ class HibariChatSession:
         seen = set()
         pool = max(self.num_candidates, int(self.intent_candidates.get(analysis.intent.value, 0)))
         self.last_reply_info["pool_size"] = pool
-        for i in range(pool):
-            dec = decoding if i == 0 else dict(self.candidate_sampling, no_repeat_ngram_size=decoding.get("no_repeat_ngram_size", 0))
-            s = seed if i == 0 else base_seed + 1000 + i
-            text, eos, ids = self._generate_reply(prompt_ids, max_new_tokens, dec, s)
+        decs = [decoding] + [dict(self.candidate_sampling, no_repeat_ngram_size=decoding.get("no_repeat_ngram_size", 0))] * (pool - 1)
+        seeds = [seed] + [base_seed + 1000 + i for i in range(1, pool)]
+        # one batched pass: the prompt is encoded once and all candidates decode together
+        results = generate_batch(self.model, self.tokenizer, prompt_ids, decs, seeds, max_new_tokens, self.device)
+        for i, (ids, reason) in enumerate(results):
+            text = clean_response(self.tokenizer.decode(ids, skip_special_tokens=True))
+            eos = reason == "stop_token"
             key = re.sub(r"\W+", " ", text.lower()).strip()
             if key in seen:
                 continue
             seen.add(key)
             scored = self.tokenizer.encode(text) + ([self.tokenizer.eos_id] if eos else [])
             cands.append(Candidate(text=text, token_ids=scored, stopped_on_eos=eos,
-                                   source="primary" if i == 0 else f"sample:{s}", n_scored_tokens=len(scored)))
+                                   source="primary" if i == 0 else f"sample:{seeds[i]}", n_scored_tokens=len(scored)))
         ctx_lp = reply_logprobs(self.model, prompt_ids, [c.token_ids for c in cands], self.device)
         gen_lp = reply_logprobs(self.model, self._generic_prompt_ids(), [c.token_ids for c in cands], self.device)
         context = " ".join(m["content"] for m in self.messages)

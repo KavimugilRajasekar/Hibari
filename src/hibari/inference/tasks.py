@@ -87,6 +87,7 @@ _INSTRUCTIONS: List[tuple] = [
     ("casual", r"(?:please\s+)?(?:make|rewrite|write)\s+(?:this|it)(?:\s+sentence|\s+message)?\s+(?:more\s+)?(?:casual|informal|relaxed)(?:ly)?"),
     ("casual", r"(?:please\s+)?(?:make|rewrite)\s+(?:this|it)\s+sound\s+(?:more\s+)?(?:casual|informal|relaxed)"),
     ("polite", r"(?:please\s+)?(?:make|rewrite)\s+(?:this|it)(?:\s+sentence|\s+message)?\s+(?:more\s+)?polite(?:ly)?"),
+    ("polite", r"(?:please\s+)?(?:rewrite|say|write|put)\s+(?:this|it)(?:\s+sentence|\s+message)?\s+in\s+a\s+(?:more\s+)?(?:polite|nicer|kind(?:er)?)\s+way"),
     ("shorten", r"(?:please\s+)?(?:make\s+(?:this|it)(?:\s+sentence)?\s+(?:shorter|more\s+concise|concise|brief)|shorten\s+(?:this|it)(?:\s+sentence)?)"),
     ("simplify", r"(?:please\s+)?(?:simplify\s+(?:this|it)(?:\s+sentence)?|make\s+(?:this|it)(?:\s+sentence)?\s+simpler)"),
     ("rephrase", r"(?:please\s+)?(?:rephrase|reword|paraphrase|rewrite)(?:\s+(?:this|it|the\s+following))?(?:\s+(?:sentence|message|text))?(?:\s+(?:properly|correctly|better|nicely|in\s+(?:proper|good|correct)\s+english))?"),

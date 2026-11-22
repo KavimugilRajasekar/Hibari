@@ -22,6 +22,38 @@ class ModelConfig:
     rope_theta: float = 10000.0
     model_name: str = "Hibari-Koto"
 
+    def __post_init__(self) -> None:
+        self.validate()
+
+    def validate(self) -> "ModelConfig":
+        """Raise ``ValueError`` listing every inconsistent hyper-parameter.
+
+        Checked: positive sizes, ``d_model`` divisible by ``n_heads``, an even
+        head dimension (RoPE rotates pairs), dropout in [0, 1), positive
+        ``norm_eps`` and ``rope_theta``. Called on construction, so a bad YAML
+        fails when it is loaded instead of deep inside the first forward pass.
+        """
+        problems = []
+        for name in ("vocab_size", "max_seq_len", "d_model", "n_layers", "n_heads", "d_ff"):
+            v = getattr(self, name)
+            low = 0 if name == "n_layers" else 1   # 0 layers = embedding-only (bigram) model, used in tests
+            if not isinstance(v, int) or isinstance(v, bool) or v < low:
+                problems.append(f"{name} must be an integer >= {low}, got {v!r}")
+        if not problems:
+            if self.d_model % self.n_heads:
+                problems.append(f"d_model ({self.d_model}) must be divisible by n_heads ({self.n_heads})")
+            elif (self.d_model // self.n_heads) % 2:
+                problems.append(f"head_dim ({self.d_model // self.n_heads}) must be even for RoPE")
+        if not 0.0 <= self.dropout < 1.0:
+            problems.append(f"dropout must be in [0, 1), got {self.dropout}")
+        if self.norm_eps <= 0:
+            problems.append(f"norm_eps must be > 0, got {self.norm_eps}")
+        if self.rope_theta <= 0:
+            problems.append(f"rope_theta must be > 0, got {self.rope_theta}")
+        if problems:
+            raise ValueError("Invalid ModelConfig: " + "; ".join(problems))
+        return self
+
     @property
     def head_dim(self) -> int:
         if self.d_model % self.n_heads != 0:
@@ -61,6 +93,14 @@ class ModelConfig:
         valid_fields = {f for f in cls.__dataclass_fields__}
         filtered = {k: v for k, v in data.items() if k in valid_fields}
         return cls(**filtered)
+
+    @classmethod
+    def from_dict_strict(cls, data: Dict[str, Any]) -> "ModelConfig":
+        """Like ``from_dict`` but unknown keys are an error (for hand-written YAML)."""
+        unknown = sorted(set(data) - set(cls.__dataclass_fields__))
+        if unknown:
+            raise ValueError(f"Unknown ModelConfig keys: {unknown}")
+        return cls(**data)
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "ModelConfig":

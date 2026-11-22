@@ -312,3 +312,11 @@ def test_o6_repeated_question_may_get_the_same_answer(model, tok):
     s.reply("what is your name", seed=0, **DEC)
     s.reply("what is your name", seed=0, **DEC)
     assert not any(k == "repeats_previous_reply" for c in s.last_reply_info["candidates"] for k, _ in c["adjustments"])
+
+
+def test_o7_condolence_and_cheer_after_insult():
+    a = analyze_message("Fuck you!")
+    adj_ = dict(CRITIC.judge("I'm sorry for your loss. I'm happy for you.", a, "hi Fuck you!"))
+    assert "condolence_without_loss" in adj_ and "hostile:cheerful_reply" in adj_
+    grief = analyze_message("My grandmother passed away last week.")
+    assert "condolence_without_loss" not in dict(CRITIC.judge("I'm so sorry for your loss.", grief, grief.text))

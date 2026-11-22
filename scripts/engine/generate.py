@@ -8,6 +8,7 @@ the evaluation and the Ollama Modelfile use)::
     python scripts/engine/generate.py --profile ... --prompt "Hi! How are you?" --temperature 0
     python scripts/engine/generate.py --profile ... --raw          # model only: no safety, router or reranking
     python scripts/engine/generate.py --profile ... --explain      # show the reply candidates and their scores
+    python scripts/engine/generate.py --profile ... --stream       # print the reply while it is generated (raw model)
 
 Commands in chat: /reset, /exit. Command-line decoding options override the profile.
 """
@@ -49,6 +50,21 @@ def build(args):
     return engine, session, gen
 
 
+def stream_reply(session, user: str, gen: dict):
+    """Stream a raw reply and keep it in the session history."""
+    from hibari.inference.generation import stream_text
+    from hibari.inference.safety import clean_response
+
+    session.add_user_message(user)
+    ids = session.build_prompt_ids(gen["max_new_tokens"])
+    dec = {k: v for k, v in gen.items() if k not in ("max_new_tokens", "seed")}
+    pieces = []
+    for p in stream_text(session.model, session.tokenizer, ids, gen["max_new_tokens"], session.device, seed=gen.get("seed"), **dec):
+        pieces.append(p)
+        yield p
+    session.messages.append({"role": "assistant", "content": clean_response("".join(pieces))})
+
+
 def show(session, explain: bool) -> None:
     if not explain:
         return
@@ -77,11 +93,20 @@ def main() -> None:
     ap.add_argument("--no-safety", action="store_true", help="Disable the deterministic safety layer")
     ap.add_argument("--raw", action="store_true", help="Raw model: no safety, router, normalisation or reranking")
     ap.add_argument("--explain", action="store_true", help="Print the message analysis and the top candidates")
+    ap.add_argument("--stream", action="store_true",
+                    help="Stream the raw model's reply token by token (no safety layer, router or reranking)")
     args = ap.parse_args()
 
+    if args.stream:
+        args.raw = True
     engine, session, gen = build(args)
     name = engine.profile.identity.name if engine.profile else "Hibari"
     if args.prompt is not None:
+        if args.stream:
+            for piece in stream_reply(session, args.prompt, gen):
+                print(piece, end="", flush=True)
+            print()
+            return
         print(session.reply(args.prompt, **gen))
         show(session, args.explain)
         return
@@ -102,6 +127,12 @@ def main() -> None:
             print("(conversation cleared)")
             continue
         try:
+            if args.stream:
+                print(f"{name}: ", end="", flush=True)
+                for piece in stream_reply(session, user, gen):
+                    print(piece, end="", flush=True)
+                print()
+                continue
             print(f"{name}: {session.reply(user, **gen)}")
             show(session, args.explain)
         except Exception as e:  # keep the chat alive on unexpected errors

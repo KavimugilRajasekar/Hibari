@@ -43,6 +43,9 @@ class Intent(str, Enum):
     REWRITE_REQUEST = "rewrite_request"
     EMAIL_REQUEST = "email_request"
     EMOTIONAL = "emotional_disclosure"    # the user shares a feeling or an emotional event
+    DISAGREEMENT = "disagreement"         # "I disagree", "that's not true", "I don't think so"
+    REPAIR = "repair"                     # "that's not what I meant", "you misunderstood"
+    TOPIC_CHANGE = "topic_change"         # "anyway, let's talk about something else"
     QUESTION = "question"
     REQUEST = "request"                   # asks for help / an action
     STATEMENT = "statement"
@@ -114,7 +117,9 @@ EMOTION_PATTERNS: List[Tuple[Emotion, str]] = [
     (Emotion.DISAPPOINTMENT, r"\b(?:disappoint\w*|let down|failed (?:my|the|an?|again|in)|fail(?:ed)? again|didn't (?:get|pass|make it|get selected|get the)|got rejected|rejected|not selected|lost (?:the|my|our) (?:match|game|job|final|competition)|got fired|laid off)\b"),
     (Emotion.DISAPPOINTMENT, r"\b(?:said|told me) my \w+ (?:was|is) (?:bad|terrible|awful|not good|wrong|poor)\b"),
     (Emotion.FRUSTRATION, r"\b(?:not|never) (?:happy|satisfied|pleased|okay) with\b"),
-    (Emotion.CONFUSION, r"\b(?:confus\w*|don't understand|do not understand|makes no sense|not making sense|i'm lost|so lost|no idea what)\b"),
+    (Emotion.SADNESS, r"\b(?:had|have had|it'?s been|was) (?:such |a really |a very |a )?(?:hard|difficult|rough|tough|bad|awful|terrible|horrible|long|exhausting) (?:day|week|night|month|year|time)\b"),
+    (Emotion.SADNESS, r"\blost (?:something|my (?:wallet|phone|keys|bag|ring|watch|job|notes|laptop|passport))\b"),
+    (Emotion.CONFUSION, r"\b(?:(?:don't|do not) know what to do|confus\w*|don't understand|do not understand|makes no sense|not making sense|i'm lost|so lost|no idea what)\b"),
     (Emotion.EXCITEMENT, r"\b(?:excited|exciting|can't wait|thrilled|pumped|got (?:the job|accepted|selected|promoted|admission|in(?:to)?)|accepted (?:into|to|at)|passed (?:my|the|an?) \w+|i won|we won|got engaged|got married|yay+|woo+|great news|good news)\b"),
     (Emotion.HAPPINESS, r"\b(?:happy|glad|so good|amazing day|great day|wonderful day|proud of myself|feeling (?:great|good|awesome|amazing)|love (?:it|this|my))\b"),
 ]
@@ -154,6 +159,12 @@ _USER_FACT = [
 ]
 # a short reply describing one's mood: "bad", "not good", "bad thats all", "meh"
 _LOW_MOOD = r"^\W*(?:(?:i'?m |i am |feeling |just |honestly )?(?:bad|not good|not great|not well|not okay|not ok|terrible|awful|horrible|meh|sad|down|lonely|tired|exhausted|stressed))(?:\W+(?:that'?s all|thats all|honestly|really|today|lately|i guess))?\W*$"
+_DISAGREE = (r"^\W*(?:i (?:disagree|don'?t agree|do not agree)|i don'?t think so|that'?s not (?:true|right|correct)|"
+             r"no,? (?:that'?s|it'?s) (?:not|wrong)|not really,? i think|i see it differently)\b")
+_REPAIR = (r"\b(?:that'?s not what i (?:meant|said|asked)|not what i meant|you misunderstood|you got it wrong|"
+           r"i (?:meant|was asking about)|that'?s not my question|you didn'?t understand)\b")
+_TOPIC_CHANGE = (r"\b(?:let'?s talk about something else|change the (?:subject|topic)|talk about something different|"
+                 r"different topic|new topic|moving on|forget (?:it|that)|never mind)\b")
 _INFORMAL_MARK = r"\b(?:u|ur|r|wat|pls|plz|thx|idk|lol|lmao|omg|im|dont|cant|gonna|wanna|btw|rn|nvm|tmrw|cuz|bro|bruh)\b"
 
 
@@ -237,6 +248,12 @@ def analyze_message(text: str) -> MessageAnalysis:
         a.intent = Intent.APOLOGY
     elif re.search(_IDENTITY, norm):
         a.intent = Intent.IDENTITY
+    elif re.search(_REPAIR, norm):
+        a.intent = Intent.REPAIR
+    elif re.search(_DISAGREE, norm):
+        a.intent = Intent.DISAGREEMENT
+    elif re.search(_TOPIC_CHANGE, norm):
+        a.intent = Intent.TOPIC_CHANGE
     elif a.emotion is not Emotion.NONE:
         a.intent = Intent.EMOTIONAL
     elif re.search(_COMPLIMENT, norm):

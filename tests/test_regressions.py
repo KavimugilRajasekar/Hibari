@@ -183,3 +183,31 @@ def test_t4_history_paths_relative_to_root(tmp_path, model, tok):
     Trainer(m, opt, None, dl, None, args=args, path_root=tmp_path / "repo").train()
     hist = json.loads((out / "training_history.json").read_text())
     assert hist["args"]["output_dir"] == "checkpoints/run"
+
+
+def test_t5_resume_continues_from_last_checkpoint(tmp_path, model, tok):
+    """0.4.0: an interrupted run continues from last_checkpoint.pt with the same weights,
+    optimizer, scheduler and step as an uninterrupted run."""
+    import json
+    from hibari.training.scheduler import get_cosine_schedule_with_warmup
+    words = ["hello world", "how are you", "I am fine thanks", "what is your name", "tell me a long story", "the sea and the sky"]
+    texts = [[{"role": "user", "content": words[i % 6]}, {"role": "assistant", "content": words[(i * 5 + 1) % 6]}] for i in range(8)]
+    ds = ConversationDataset(texts, tok, max_seq_len=32)
+
+    def run(out, steps, resume=False):
+        torch.manual_seed(0)
+        m = HibariKotoLM(model.config)
+        opt = configure_optimizers(m, learning_rate=1e-3, weight_decay=0.0)
+        sch = get_cosine_schedule_with_warmup(opt, 1, 4)
+        dl = DataLoader(ds, batch_size=2, collate_fn=DataCollatorForCausalLM(tok.pad_id))  # same order every pass
+        args = TrainingArgs(max_steps=steps, output_dir=str(out), checkpoint_every=2, eval_every=100, log_every=1, save_best=False)
+        t = Trainer(m, opt, sch, dl, None, args=args, resume_from=(out / "last_checkpoint.pt") if resume else None)
+        t.train()
+        return m, json.loads((out / "training_history.json").read_text())
+
+    full, _ = run(tmp_path / "full", 4)
+    run(tmp_path / "part", 2)
+    resumed, hist = run(tmp_path / "part", 4, resume=True)
+    assert [r["step"] for r in hist["history"] if "train_loss" in r] == [1, 2, 3, 4]
+    for a, b in zip(full.parameters(), resumed.parameters()):
+        assert torch.allclose(a, b, atol=1e-6)

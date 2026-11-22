@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hibari"
-version = "0.3.1"
+version = "0.4.0"
 description = "Hibari — an LLM-Brain built from the ground up"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -17,6 +17,8 @@ dependencies = [
     "numpy>=1.26",
     "tqdm>=4.66",
     "pyyaml>=6.0",
+    "tokenizers>=0.15",
+    "gguf>=0.10",
 ]
 
 [project.urls]
