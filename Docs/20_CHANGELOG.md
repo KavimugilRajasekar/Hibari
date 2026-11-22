@@ -5,6 +5,29 @@ Model-specific changes to Koto are recorded in `models/Koto/CHANGELOG.md`.
 
 ---
 
+## [0.3.0] — 2026-11-22: Conversational layer, release profiles, development template
+
+### Added
+- `hibari.inference.intent` (message analysis), `hibari.inference.normalization`
+  (informal input), `hibari.inference.reranking` (candidate scoring: fluency, PMI
+  relevance, named critic rules). `HibariChatSession` options `normalize_input`,
+  `num_candidates`, `intent_candidates`, `candidate_sampling`, `identity_terms`,
+  `last_reply_info`; defaults leave the old path unchanged. See `engine/26_CONVERSATIONAL_LAYER.md`.
+- `hibari.release`: `ModelProfile`, `InferenceSettings`, `validate_profile`,
+  `render_modelfile`; `InferenceEngine.from_profile`. See `engine/27_RELEASE_PROFILES_AND_PROVENANCE.md`.
+- GGUF export: `system_prompt` and `hibari.*` provenance metadata; `build_chat_template`.
+- Scripts: `export.py --profile/--record/--force` (no silent replacement),
+  `validate_release.py`, `validate_experiments.py`, `compare_backends.py`,
+  `generate.py --profile/--raw/--explain`.
+- More rewrite phrasings ("rewrite this properly", "improve this", "make this better").
+- Development template: `template/21–25`, validated config templates in `hibari/configs/`
+  (model, data, training, sft, inference, release, experiment).
+- Tests: `tests/test_conversational_layer.py`, `tests/test_release.py` (311 tests in total).
+
+### Fixed
+- Engine config templates used keys no code reads (`context_length`, `embedding_dim`, `use_lora`, …).
+- `generate.py` / `export.py` defaulted to the 1.0.0 checkpoint and to `general.version 2.0`.
+
 ## [0.2.0] — 2026-11-21: Rewriting tasks, n-gram blocking, gradient accumulation (branch `feature/koto-1.1.0`)
 
 ### Added

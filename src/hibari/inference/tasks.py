@@ -89,7 +89,9 @@ _INSTRUCTIONS: List[tuple] = [
     ("polite", r"(?:please\s+)?(?:make|rewrite)\s+(?:this|it)(?:\s+sentence|\s+message)?\s+(?:more\s+)?polite(?:ly)?"),
     ("shorten", r"(?:please\s+)?(?:make\s+(?:this|it)(?:\s+sentence)?\s+(?:shorter|more\s+concise|concise|brief)|shorten\s+(?:this|it)(?:\s+sentence)?)"),
     ("simplify", r"(?:please\s+)?(?:simplify\s+(?:this|it)(?:\s+sentence)?|make\s+(?:this|it)(?:\s+sentence)?\s+simpler)"),
-    ("rephrase", r"(?:please\s+)?(?:rephrase|reword|paraphrase|rewrite)(?:\s+(?:this|it|the\s+following))?(?:\s+sentence)?"),
+    ("rephrase", r"(?:please\s+)?(?:rephrase|reword|paraphrase|rewrite)(?:\s+(?:this|it|the\s+following))?(?:\s+(?:sentence|message|text))?(?:\s+(?:properly|correctly|better|nicely|in\s+(?:proper|good|correct)\s+english))?"),
+    ("rephrase", r"(?:please\s+)?(?:improve|polish)\s+(?:this|it|my)(?:\s+(?:sentence|message|text|writing))?"),
+    ("rephrase", r"(?:please\s+)?make\s+(?:this|it)(?:\s+(?:sentence|message))?\s+(?:better|sound\s+better|clearer|more\s+natural)"),
 ]
 # The instruction must be followed by a separator (":", "-", a newline, an
 # opening quote) or by nothing, so "rewrite the story about dragons" stays chat.

@@ -39,17 +39,24 @@ from hibari.data.formatting import DEFAULT_SYSTEM_PROMPT
 from hibari.data.tokenizer import SPECIAL_TOKENS, HibariTokenizer
 from hibari.model.llm import HibariKotoLM
 
-# Jinja chat template (llama.cpp / HF style). Mirrors
-# HibariTokenizer.apply_chat_template exactly.
-CHAT_TEMPLATE = (
-    "{%- if messages[0]['role'] != 'system' %}"
-    "{{- '<|system|>\\n" + DEFAULT_SYSTEM_PROMPT + "<|eos|>\\n' }}"
-    "{%- endif %}"
-    "{%- for message in messages %}"
-    "{{- '<|' + message['role'] + '|>\\n' + message['content'] | trim + '<|eos|>\\n' }}"
-    "{%- endfor %}"
-    "{%- if add_generation_prompt %}{{- '<|assistant|>\\n' }}{%- endif %}"
-)
+def build_chat_template(system_prompt: str) -> str:
+    """Jinja chat template (llama.cpp / HF style) mirroring
+    ``HibariTokenizer.apply_chat_template``; ``system_prompt`` is used when the
+    conversation does not start with a system message."""
+    sp = system_prompt.replace("\\", "\\\\").replace("'", "\\'")
+    return (
+        "{%- if messages[0]['role'] != 'system' %}"
+        "{{- '<|system|>\\n" + sp + "<|eos|>\\n' }}"
+        "{%- endif %}"
+        "{%- for message in messages %}"
+        "{{- '<|' + message['role'] + '|>\\n' + message['content'] | trim + '<|eos|>\\n' }}"
+        "{%- endfor %}"
+        "{%- if add_generation_prompt %}{{- '<|assistant|>\\n' }}{%- endif %}"
+    )
+
+
+# Backwards-compatible constant (engine default system prompt).
+CHAT_TEMPLATE = build_chat_template(DEFAULT_SYSTEM_PROMPT)
 
 SUPPORTED_OUTTYPES = {"f32", "f16"}
 
@@ -109,6 +116,8 @@ def export_to_gguf(
     version: str = "2.0",
     author: str = "Kavimugil Rajasekar",
     description: Optional[str] = None,
+    system_prompt: Optional[str] = None,
+    provenance: Optional[Dict[str, object]] = None,
 ) -> Path:
     """Export a trained Hibari model to a self-contained GGUF file.
 
@@ -119,6 +128,14 @@ def export_to_gguf(
         output_path: Target ``.gguf`` path.
         quantization_type: ``'f32'`` or ``'f16'`` (for Q8_0/Q4_K_M use
             llama-quantize on the F32 output).
+        version: model release version written to ``general.version``.
+        system_prompt: default system prompt of the embedded chat template
+            (defaults to the engine's ``DEFAULT_SYSTEM_PROMPT``).
+        provenance: extra ``hibari.*`` metadata (model / weights version,
+            checkpoint and tokenizer SHA-256) — see
+            ``hibari.release.ModelProfile.provenance``. llama.cpp and Ollama
+            ignore unknown keys; ``hibari.release.validate_profile`` reads them
+            to prove which weights a GGUF holds.
     """
     if quantization_type not in SUPPORTED_OUTTYPES:
         raise ValueError(
@@ -191,7 +208,17 @@ def export_to_gguf(
         # Training sequences start with <|system|>, never with <|bos|>.
         writer.add_add_bos_token(False)
         writer.add_add_eos_token(False)
-        writer.add_chat_template(CHAT_TEMPLATE)
+        writer.add_chat_template(build_chat_template(system_prompt or DEFAULT_SYSTEM_PROMPT))
+
+    for key, value in (provenance or {}).items():
+        if not key.startswith("hibari."):
+            raise ValueError(f"provenance keys must start with 'hibari.', got {key!r}")
+        if isinstance(value, bool) or not isinstance(value, (int, str)):
+            raise TypeError(f"provenance value for {key} must be str or int")
+        if isinstance(value, int):
+            writer.add_uint32(key, value)
+        else:
+            writer.add_string(key, value)
 
     # ---------------- tensors ----------------
     state_dict = model.state_dict()

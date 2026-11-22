@@ -1,14 +1,18 @@
 # hibari/ — Base Configurations
 
-This folder holds only the engine's **base YAML configurations**:
+This folder holds the engine's **configuration templates** (Docs/template/21). Their keys are
+tested against the code (`tests/test_release.py::test_p9`); nothing reads them at run time —
+models copy them into their own `configs/`.
 
 ```
 hibari/configs/
-├── model/base.yaml        # Default ModelConfig values
-├── training/base.yaml     # Default TrainingArgs values
-├── training/sft.yaml      # SFT defaults
-├── inference/base.yaml    # Default sampling settings
-└── data/base.yaml         # Default data settings
+├── model/base.yaml          # TEMPLATE: ModelConfig fields
+├── training/base.yaml       # TEMPLATE: training from scratch (TrainingArgs + repo keys)
+├── training/sft.yaml        # TEMPLATE: continued training / full fine-tuning (no LoRA yet)
+├── inference/base.yaml      # TEMPLATE: InferenceSettings (decoding + application layer)
+├── data/base.yaml           # TEMPLATE: keys every model data config defines
+├── release/template.yaml    # TEMPLATE: release profile (hibari.release.ModelProfile)
+└── experiment/template.yaml # TEMPLATE: experiment record
 ```
 
 Everything else that used to live here has moved:

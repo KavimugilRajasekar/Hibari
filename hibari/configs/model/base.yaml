@@ -1,10 +1,15 @@
-# Hibari — Base Model Config
-vocab_size: 32000
-context_length: 2048
-embedding_dim: 512
-num_layers: 8
-num_heads: 8
-ffn_hidden_dim: 2048
-dropout: 0.1
+# TEMPLATE — Hibari model architecture (hibari.model.config.ModelConfig).
+# Keys are exactly the ModelConfig fields (tests/test_release.py::test_p9 checks this).
+# Copy to <model repo>/configs/model/<model>.yaml. Changing any value other than
+# model_name makes a new, incompatible architecture: that is a MAJOR version.
+model_name: "Hibari-Base"
+vocab_size: 4096          # must equal the tokenizer vocabulary
+max_seq_len: 256          # trained context window (also GGUF llama.context_length)
+d_model: 256              # must be divisible by n_heads
+n_layers: 6
+n_heads: 8
+d_ff: 768                 # SwiGLU hidden size (~3 x d_model)
 norm_eps: 1.0e-5
-tie_embeddings: true
+dropout: 0.0
+tie_embeddings: true      # GGUF omits output.weight when tied
+rope_theta: 10000.0

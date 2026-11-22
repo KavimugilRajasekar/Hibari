@@ -34,6 +34,12 @@ Hibari is an open-source cognitive LLM architecture and language model project d
 
 ---
 
+## Development process
+
+Follow the Official Hibari Development Template (`Docs/template/21_DEVELOPMENT_TEMPLATE.md`):
+the lifecycle (22), the standards (23), and the checklist (25) in every pull request.
+Never start a training run from automation; training is authorised and run by the owner.
+
 ## Code Guidelines
 
 - Adhere to PEP 8 standards.

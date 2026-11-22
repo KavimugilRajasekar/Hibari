@@ -1,6 +1,19 @@
-# Hibari — Inference Config
-max_new_tokens: 512
-temperature: 0.7
-top_k: 50
-top_p: 0.9
-repetition_penalty: 1.1
+# TEMPLATE — inference settings (hibari.release.InferenceSettings; unknown keys are an error).
+# The model repository's copy is the ONLY place decoding defaults are defined; the
+# release profile references it, and the Ollama Modelfile is generated from it.
+max_new_tokens: 80        # must be < max_seq_len
+temperature: 0.5          # 0 = greedy
+top_k: 25
+top_p: 0.85
+repetition_penalty: 1.15
+no_repeat_ngram_size: 0
+# application layer (Python engine only)
+enable_safety: true
+route_tasks: true
+normalize_input: false
+num_candidates: 1         # >1 enables candidate reranking (hibari.inference.reranking)
+intent_candidates: {}     # e.g. {emotional_disclosure: 16, hostile: 16}
+candidate_sampling: {}    # default: temperature 0.8, top_k 40, top_p 0.95, repetition_penalty 1.1
+# GGUF runtimes
+num_ctx: 256              # <= trained max_seq_len
+repeat_last_n: 64

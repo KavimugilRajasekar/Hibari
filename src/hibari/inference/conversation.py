@@ -12,6 +12,18 @@ Pipeline for each user turn:
 3. The reply is cleaned (chat markers removed, emojis capped, a dangling
    unfinished sentence trimmed). No content is added.
 
+Optional (enabled by a model's release profile, see ``hibari.release``):
+
+* ``normalize_input`` — the model sees the user message with chat shorthand
+  expanded (``hibari.inference.normalization``); the safety layer and the
+  rewriting router always see the original text.
+* ``num_candidates > 1`` — the model generates several replies (the first
+  with the caller's decoding settings, the rest sampled with fixed seeds) and
+  ``hibari.inference.reranking`` picks the one that best fits the message:
+  fluency, context relevance (PMI against an empty user turn) and named
+  appropriateness rules. Every reply is still written by the model.
+  ``last_reply_info`` records all candidates and why the winner won.
+
 Rewriting tasks (rephrase, grammar correction, formal / casual / polite,
 shorten, simplify) are recognised by ``hibari.inference.tasks`` and sent in
 the canonical ``Task: ...\nInput: ...`` form that the model is trained on,
@@ -29,13 +41,16 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 
 import torch
 
 from hibari.data.formatting import DEFAULT_SYSTEM_PROMPT
 from hibari.data.tokenizer import HibariTokenizer, escape_special_tokens
 from hibari.inference.generation import generate_tokens
+from hibari.inference.intent import Intent, MessageAnalysis, analyze_message
+from hibari.inference.normalization import normalize_informal
+from hibari.inference.reranking import Candidate, CriticWeights, ReplyCritic, reply_logprobs, score_candidates
 from hibari.inference.safety import (
     assess_message,
     clean_response,
@@ -52,6 +67,10 @@ from hibari.inference.tasks import (
 from hibari.model.llm import HibariKotoLM
 
 EMPTY_INPUT_RESPONSE = "I didn't catch that. What would you like to talk about?"
+
+# Sampling used for the extra candidates when num_candidates > 1.
+DEFAULT_CANDIDATE_SAMPLING = dict(temperature=0.8, top_k=40, top_p=0.95, repetition_penalty=1.1)
+EMAIL_MAX_NEW_TOKENS = 160
 
 
 TOO_LONG_TASK_RESPONSE = "That text is too long for me to rewrite in one piece. Could you send it in shorter parts?"
@@ -84,8 +103,20 @@ class HibariChatSession:
         device: str | torch.device = "cpu",
         enable_safety: bool = True,
         route_tasks: bool = True,
+        normalize_input: bool = False,
+        num_candidates: int = 1,
+        candidate_sampling: Optional[Dict] = None,
+        identity_terms: Sequence[str] = (),
+        critic_weights: Optional[CriticWeights] = None,
+        intent_candidates: Optional[Dict[str, int]] = None,
     ):
         self.model = model
+        self.normalize_input = normalize_input
+        self.num_candidates = max(1, int(num_candidates))
+        self.candidate_sampling = dict(candidate_sampling or DEFAULT_CANDIDATE_SAMPLING)
+        # per-intent pool size, e.g. {"emotional_disclosure": 16}; only used when num_candidates > 1
+        self.intent_candidates = dict(intent_candidates or {})
+        self.critic = ReplyCritic(identity_terms=identity_terms, weights=critic_weights)
         self.route_tasks = route_tasks
         self.tokenizer = tokenizer
         self.device = device
@@ -102,6 +133,8 @@ class HibariChatSession:
         # True when the last generated reply ended with a stop token rather
         # than hitting the token limit (None if no generation happened).
         self.last_stopped_on_eos: Optional[bool] = None
+        # Debug record of the last reply: analysis, model input, candidates.
+        self.last_reply_info: Dict = {}
 
     def add_user_message(self, message: str) -> None:
         self.messages.append({"role": "user", "content": message.strip()})
@@ -154,6 +187,7 @@ class HibariChatSession:
         user_message = (user_message or "").strip()
         self.last_task = None
         self.last_stopped_on_eos = None
+        self.last_reply_info = {}
         if not user_message:
             return EMPTY_INPUT_RESPONSE
 
@@ -161,7 +195,10 @@ class HibariChatSession:
         if request is not None:
             return self.run_task(request.task, request.text).output
 
-        self.add_user_message(user_message)
+        analysis = analyze_message(user_message)
+        model_text = normalize_informal(user_message) if self.normalize_input else user_message
+        self.last_reply_info = {"analysis": analysis.to_dict(), "model_input": model_text, "candidates": []}
+        self.add_user_message(model_text)
 
         assessment = assess_message(user_message) if self.enable_safety else None
         self.last_safety_category = assessment.category.value if assessment else None
@@ -170,32 +207,64 @@ class HibariChatSession:
             self.messages.append({"role": "assistant", "content": response})
             return response
 
+        if analysis.intent is Intent.EMAIL_REQUEST:
+            max_new_tokens = max(max_new_tokens, EMAIL_MAX_NEW_TOKENS)
         prompt_ids = self.build_prompt_ids(max_new_tokens)
-        gen_stats: Dict = {}
-        new_ids = generate_tokens(
-            model=self.model,
-            tokenizer=self.tokenizer,
-            prompt="",
-            prompt_ids=prompt_ids,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            top_k=top_k,
-            top_p=top_p,
-            repetition_penalty=repetition_penalty,
-            device=self.device,
-            seed=seed,
-            no_repeat_ngram_size=no_repeat_ngram_size,
-            stats=gen_stats,
-        )
-        self.last_stopped_on_eos = gen_stats.get("stop_reason") == "stop_token"
-        response = clean_response(
-            self.tokenizer.decode(new_ids, skip_special_tokens=True)
-        )
+        decoding = dict(temperature=temperature, top_k=top_k, top_p=top_p, repetition_penalty=repetition_penalty,
+                        no_repeat_ngram_size=no_repeat_ngram_size)
+        if self.num_candidates > 1:
+            response, eos = self._reply_with_candidates(prompt_ids, max_new_tokens, decoding, seed, analysis)
+        else:
+            response, eos, _ = self._generate_reply(prompt_ids, max_new_tokens, decoding, seed)
+        self.last_stopped_on_eos = eos
         if not response:
             response = "Sorry, I'm not sure how to answer that. Could you say it another way?"
 
         self.messages.append({"role": "assistant", "content": response})
         return response
+
+    def _generate_reply(self, prompt_ids: List[int], max_new_tokens: int, decoding: Dict, seed: Optional[int]) -> tuple:
+        gen_stats: Dict = {}
+        new_ids = generate_tokens(
+            model=self.model, tokenizer=self.tokenizer, prompt="", prompt_ids=prompt_ids,
+            max_new_tokens=max_new_tokens, device=self.device, seed=seed, stats=gen_stats, **decoding,
+        )
+        text = clean_response(self.tokenizer.decode(new_ids, skip_special_tokens=True))
+        return text, gen_stats.get("stop_reason") == "stop_token", new_ids
+
+    def _generic_prompt_ids(self) -> List[int]:
+        """System prompt + an empty user turn: the baseline for context relevance."""
+        msgs = self.messages[:1] + [{"role": "user", "content": ""}]
+        return self.tokenizer.encode(self.tokenizer.apply_chat_template(msgs, add_generation_prompt=True))
+
+    def _reply_with_candidates(self, prompt_ids: List[int], max_new_tokens: int, decoding: Dict,
+                               seed: Optional[int], analysis: MessageAnalysis) -> tuple:
+        base_seed = 0 if seed is None else seed
+        cands: List[Candidate] = []
+        seen = set()
+        pool = max(self.num_candidates, int(self.intent_candidates.get(analysis.intent.value, 0)))
+        self.last_reply_info["pool_size"] = pool
+        for i in range(pool):
+            dec = decoding if i == 0 else dict(self.candidate_sampling, no_repeat_ngram_size=decoding.get("no_repeat_ngram_size", 0))
+            s = seed if i == 0 else base_seed + 1000 + i
+            text, eos, ids = self._generate_reply(prompt_ids, max_new_tokens, dec, s)
+            key = re.sub(r"\W+", " ", text.lower()).strip()
+            if key in seen:
+                continue
+            seen.add(key)
+            scored = self.tokenizer.encode(text) + ([self.tokenizer.eos_id] if eos else [])
+            cands.append(Candidate(text=text, token_ids=scored, stopped_on_eos=eos,
+                                   source="primary" if i == 0 else f"sample:{s}", n_scored_tokens=len(scored)))
+        ctx_lp = reply_logprobs(self.model, prompt_ids, [c.token_ids for c in cands], self.device)
+        gen_lp = reply_logprobs(self.model, self._generic_prompt_ids(), [c.token_ids for c in cands], self.device)
+        context = " ".join(m["content"] for m in self.messages)
+        for c, a, b in zip(cands, ctx_lp, gen_lp):
+            c.logprob, c.generic_logprob = a, b
+            c.adjustments = self.critic.judge(c.text, analysis, context, c.stopped_on_eos)
+        ranked = score_candidates(cands, self.critic.w)
+        self.last_reply_info["candidates"] = [c.to_dict() for c in ranked]
+        best = ranked[0]
+        return best.text, best.stopped_on_eos
 
     def _task_candidate(self, prompt_ids: List[int], max_new: int, decoding: Dict, seed: Optional[int]) -> tuple:
         gen_stats: Dict = {}

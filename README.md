@@ -51,8 +51,9 @@ The project is split into two Git repositories:
 | Export Formats | **GGUF: F32, F16, Q8_0, Q4_K_M** | llama.cpp and Ollama (output parity verified against PyTorch) |
 | GGUF File Size | **24.8 MB (F32) / 12.5 MB (F16) / 6.7 MB (Q8_0) / 4.0 MB (Q4_K_M)** | Small enough for any laptop |
 
-> **1.0.0** (`checkpoints/koto_start`) is the released model. **1.1.0**
-> (`checkpoints/koto_1.1.0`) is trained and evaluated but not yet released:
+> **1.1.1** (`configs/release/koto_1.1.1.yaml`) is the current release candidate: the 1.1.0
+> weights with the 0.3.0 conversational layer. **1.0.0** is `checkpoints/koto_start`. **1.1.0**
+> (`checkpoints/koto_1.1.0`) was trained and evaluated:
 > much better at grammar correction and rewriting, somewhat better at
 > multi-turn dialogue, slightly worse at open chit-chat, and it still
 > invents facts. GGUF files exist for 1.0.0 only.
@@ -368,6 +369,13 @@ To minimize memory usage and parameter count on edge devices, the output project
 
 ---
 
+## Current Status (2026-11-22)
+
+- Engine **0.3.0**; Koto **1.1.1** = 1.1.0 weights + conversational layer + provenance-checked GGUFs
+  (report: `models/Koto/docs/31_KOTO_1.1.1_REPAIR_REPORT.md`).
+- Koto **1.2.0** data and configs prepared, not trained (`models/Koto/docs/30_KOTO_MODEL_TEMPLATE.md`).
+- Development process: `Docs/template/21_DEVELOPMENT_TEMPLATE.md`.
+
 ## Quick Start Guide
 
 ### 1. Environment Setup
@@ -417,21 +425,14 @@ refuses to overwrite an existing `best_model.pt`.
 
 ### 4. Chat with the Model
 
-From the engine root (`cd ../..`):
+From the engine root (`cd ../..`). The release profile supplies the checkpoint,
+tokenizer, system prompt and every inference setting:
 
 ```bash
-python scripts/engine/generate.py \
-  --checkpoint models/Koto/checkpoints/koto_start/best_model.pt \
-  --tokenizer-dir models/Koto/tokenizer
-```
-
-Single reply:
-
-```bash
-python scripts/engine/generate.py \
-  --checkpoint models/Koto/checkpoints/koto_start/best_model.pt \
-  --tokenizer-dir models/Koto/tokenizer \
-  --prompt "Hello Hibari, how are you today?"
+python scripts/engine/generate.py --profile models/Koto/configs/release/koto_1.1.1.yaml
+python scripts/engine/generate.py --profile models/Koto/configs/release/koto_1.1.1.yaml \
+  --prompt "Hello, how are you today?" --explain     # shows the reply candidates and scores
+python scripts/engine/generate.py --profile ... --raw  # the model alone, as in Ollama
 ```
 
 ### 5. Evaluate
@@ -439,34 +440,37 @@ python scripts/engine/generate.py \
 From `models/Koto`:
 
 ```bash
+python evaluation/evaluate_behaviour.py --profile configs/release/koto_1.1.1.yaml \
+  --name koto_1.1.1_behaviour --seeds 0 1 2
 python evaluation/evaluate_upgrade.py \
-  --checkpoint checkpoints/koto_start/best_model.pt --name koto_1.0.0 \
-  --data-dir data/processed_1.1.0 --train-file data/processed_1.1.0/train_conversations.json
+  --checkpoint checkpoints/koto_1.1.0/best_model.pt --name koto_1.1.0 --data-dir data/processed_1.1.0
 ```
 
-Reports are written to `outputs/evaluation/` (Markdown and JSON). The 1.0.0
-baseline is in `outputs/evaluation/koto_1.0.0_baseline.md`.
+Reports are written to `outputs/evaluation/` (Markdown and JSON).
 
-### 6. Export to GGUF (llama.cpp and Ollama)
+### 6. Validate, export and compare backends (llama.cpp and Ollama)
 
 From the engine root:
 
 ```bash
-python scripts/engine/export.py \
-  --checkpoint models/Koto/checkpoints/koto_start/best_model.pt \
-  --tokenizer-dir models/Koto/tokenizer \
-  --outdir models/Koto/releases/exported \
-  --variants f32 f16 q8_0 q4_k_m \
-  --llama-quantize /path/to/llama.cpp/build/bin/llama-quantize
+python scripts/engine/validate_release.py --profile models/Koto/configs/release/koto_1.1.1.yaml
+LD_LIBRARY_PATH=~/llama.cpp python scripts/engine/export.py \
+  --profile models/Koto/configs/release/koto_1.1.1.yaml \
+  --llama-quantize ~/llama.cpp/llama-quantize --record
+python scripts/engine/compare_backends.py --profile models/Koto/configs/release/koto_1.1.1.yaml \
+  --llama-bin ~/llama.cpp --report models/Koto/outputs/evaluation/backend_parity_1.1.1.json
 ```
 
-Deploy with Ollama:
+Deploy with Ollama (the Modelfile is generated from the profile):
 
 ```bash
-cd models/Koto/releases/exported
-ollama create hibari-koto -f Modelfile
-ollama run hibari-koto
+cd models/Koto/releases/exported/1.1.1
+ollama create hibari-koto:1.1.1 -f Modelfile
+ollama run hibari-koto:1.1.1
 ```
+
+> The older GGUFs directly in `models/Koto/releases/exported/` contain the **1.0.0**
+> weights under a stale "koto_v4" label (see that folder's README).
 
 The Python safety layer is **not** part of the GGUF; under Ollama only the
 behaviour learned in training applies. See

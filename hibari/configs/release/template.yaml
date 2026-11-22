@@ -1,0 +1,30 @@
+# TEMPLATE — release profile (hibari.release.ModelProfile). One file per model version,
+# in <model repo>/configs/release/<model>_X.Y.Z.yaml. Validate with
+#   python scripts/engine/validate_release.py --profile <file>
+model: <model>
+version: 0.0.0                 # release version (semver)
+weights_version: 0.0.0         # version of the trained weights shipped (a PATCH release may reuse weights)
+training_status: NOT_STARTED   # NOT_STARTED | NOT_REQUIRED | MANUALLY_AUTHORIZED | COMPLETED
+experiment: EXP-XXXX
+identity:
+  name: <Name>
+  architecture: Hibari
+  creator: <author>
+  terms: [<name>, hibari]      # words allowed in identity answers (reply critic)
+system_prompt: >-
+  You are <Name>, ...
+training_system_prompt: >-     # the prompt the weights were trained with (a mismatch is a warning)
+  You are <Name>, ...
+model_config: configs/model/<model>.yaml
+inference_config: configs/inference/<model>.yaml
+checkpoint: checkpoints/<model>_X.Y.Z/best_model.pt
+checkpoint_sha256: null        # sha256sum of the checkpoint
+tokenizer_dir: tokenizer
+tokenizer_sha256: null         # sha256sum tokenizer/tokenizer.json
+gguf:
+  dir: releases/exported/X.Y.Z
+  files:                       # sha256 filled in by export.py --profile --record
+    f32: {file: Hibari-<Name>-X.Y.Z-F32.gguf}
+    f16: {file: Hibari-<Name>-X.Y.Z-F16.gguf}
+    q8_0: {file: Hibari-<Name>-X.Y.Z-Q8_0.gguf}
+    q4_k_m: {file: Hibari-<Name>-X.Y.Z-Q4_K_M.gguf}
