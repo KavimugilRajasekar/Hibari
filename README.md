@@ -206,7 +206,8 @@ Hibari/                                          ══ ENGINE REPOSITORY ══
 │   ├── test_metrics.py                 (88)     Metrics; gradient accumulation equivalence
 │   ├── test_export.py                  (31)     GGUF header basics
 │   ├── test_gguf_export_comprehensive.py (689)  Full GGUF structure, tokenizer and reference-runtime parity
-│   └── test_regressions.py            (170)     One test per bug fixed in the 2026-11 review
+│   ├── test_regressions.py                      One test per bug fixed in the 2026-11 review
+│   └── test_architecture_invariants.py          Causality, KV cache, RoPE, GGUF reference runtime, runtime paths
 │
 ├── hibari/configs/                              Engine base templates: model/ training/ (base, sft) data/ inference/
 │

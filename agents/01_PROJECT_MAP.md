@@ -43,10 +43,11 @@ Git-ignored, local only: `checkpoints/`, `data/processed*`, `*.gguf`, `archive/*
 
 | Item | Value |
 |---|---|
-| Engine version | 0.4.0 (branch `feature/koto-1.3.0`, commit `91db4a2`) |
+| Engine version | 0.4.1 (branch `feature/koto-1.3.0`) |
 | Current Koto release | 1.1.1 (weights 1.1.0) — `configs/release/koto_1.1.1.yaml` |
 | Trained, not released | 1.2.0 — `configs/release/koto_1.2.0.yaml` (EXP-0004): rewriting regression, see Koto docs/32 |
-| Next Koto version | 1.3.0 — **29.4M-parameter** model (`configs/model/koto_1.3.0_large.yaml`), **trained 2026-11-23** by the owner (EXP-0006, `checkpoints/koto_1.3.0_large/`, best eval loss 2.875 at step 12k), not evaluated; recorded training data (99,640 examples, `data\processed`) does not match the prepared `data/processed_1.3.0` (93,509) — owner to confirm; 1.2.1 superseded |
+| Trained, not accepted | 1.3.0 — 29.4M (EXP-0006, `checkpoints/koto_1.3.0_large/`): trained on other data than its config named; behaviour 0.558 vs 0.660, reformulation 0.333; GGUFs in `releases/exported/1.3.0/` for testing only |
+| Next Koto version | 1.3.1 — retrain of the 29.4M model on `data/processed_1.3.0` with a pinned data fingerprint and `resid_dropout 0.1` (EXP-0007, `configs/training/koto_1.3.1_large.yaml`); training NOT STARTED |
 | Branches / tags | Koto `release/1.3.0` (local work), `release/1.2.0`, `release/1.1.0`, tags `v1.1.0` `v1.1.1`; Hibari `feature/koto-1.1.0`, tag `engine-v0.3.0`; both `main` branches are behind |
 | Legacy trap | `models/Koto/releases/exported/*.gguf` hold **1.0.0** weights; use `exported/1.1.1/` |
 | Environment | Python venv `.venv`; llama.cpp binaries in `~/llama.cpp` (need `LD_LIBRARY_PATH=~/llama.cpp`); Ollama CLI installed (the system `ollama.service` was broken on 2026-11-22: missing `/usr/share/ollama`) |

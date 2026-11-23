@@ -104,6 +104,11 @@ def validate_profile(profile: ModelProfile, check_hashes: bool = True, check_ggu
     import torch
     ck = torch.load(profile.resolve(profile.checkpoint), map_location="cpu", weights_only=False)
     ck_cfg = {k: v for k, v in (ck.get("config") or {}).items() if k != "model_name"}
+    # A field added to ModelConfig after the checkpoint was saved (e.g. resid_dropout, engine 0.4.1)
+    # was not in effect then: compare it as its default value.
+    from dataclasses import fields as _fields
+    for f in _fields(ModelConfig):
+        ck_cfg.setdefault(f.name, f.default)
     want = {k: v for k, v in cfg.to_dict().items() if k != "model_name"}
     diff = {k: (ck_cfg.get(k), v) for k, v in want.items() if ck_cfg.get(k) != v}
     (ok if not diff else err)("checkpoint:config", "matches model config" if not diff else f"checkpoint vs config differ: {diff}")
@@ -202,13 +207,16 @@ def _validate_gguf(profile: ModelProfile, cfg, tok, step, modelfile_variant) -> 
     mf = gdir / "Modelfile"
     if profile.gguf_files:
         variant = modelfile_variant or profile.gguf_files[0].variant
-        gfile = next(g.file for g in profile.gguf_files if g.variant == variant)
-        expected = render_modelfile(profile, gfile)
-        if not mf.exists():
+        gfile = next((g.file for g in profile.gguf_files if g.variant == variant), None)
+        if gfile is None:
+            F.append(Finding("error", "modelfile", f"variant {variant!r} is not one of the profile's GGUF files "
+                                                   f"{[g.variant for g in profile.gguf_files]}"))
+        elif not mf.exists():
             F.append(Finding("error", "modelfile", f"missing {mf}"))
         else:
-            F.append(Finding("ok" if mf.read_text(encoding="utf-8") == expected else "error", "modelfile",
-                             "identical to the rendered profile Modelfile" if mf.read_text(encoding="utf-8") == expected
+            same = mf.read_text(encoding="utf-8") == render_modelfile(profile, gfile)
+            F.append(Finding("ok" if same else "error", "modelfile",
+                             "identical to the rendered profile Modelfile" if same
                              else "differs from render_modelfile(profile); regenerate it"))
     manifest = gdir / "export_manifest.json"
     if manifest.exists():

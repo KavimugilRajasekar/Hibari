@@ -43,7 +43,11 @@ def load_checkpoint(
     device: str | torch.device = "cpu",
     load_training_state: bool = False,
 ) -> Dict[str, Any]:
-    """Load model checkpoint and optionally return training state."""
+    """Load model checkpoint and optionally return training state.
+
+    The model is returned in eval mode: with ``resid_dropout`` > 0 (engine 0.4.1) a model left in
+    training mode gives a different answer on every call. ``Trainer.train`` switches back to train mode.
+    """
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"Checkpoint not found at: {path}")
@@ -56,6 +60,7 @@ def load_checkpoint(
     model = HibariKotoLM(config)
     model.load_state_dict(checkpoint["model_state_dict"])
     model.to(device)
+    model.eval()
 
     result = {
         "model": model,

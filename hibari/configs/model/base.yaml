@@ -10,6 +10,7 @@ n_layers: 6
 n_heads: 8
 d_ff: 768                 # SwiGLU hidden size (~3 x d_model)
 norm_eps: 1.0e-5
-dropout: 0.0
+dropout: 0.0              # attention weights
+resid_dropout: 0.0        # sub-layer outputs before the residual add (engine 0.4.1); no parameters
 tie_embeddings: true      # GGUF omits output.weight when tied
 rope_theta: 10000.0

@@ -80,7 +80,20 @@ def llama_tokenize(bin_dir: Path, model: Path, text: str) -> List[int]:
     return json.loads(out)
 
 
+def trim_to_tokens(text: str, tok, n: int) -> str:
+    """First ``n`` tokens of ``text`` (re-tokenised), so both backends are compared at the same length."""
+    ids = tok.encode(text)
+    return text.strip() if len(ids) <= n else tok.decode(ids[:n], skip_special_tokens=True).strip()
+
+
 def llama_greedy(bin_dir: Path, model: Path, prompt: str, n: int) -> str:
+    """Greedy continuation of at most ``n`` tokens.
+
+    ``llama-completion -n k`` prints k-1 tokens (measured 2026-11-23 for k = 5, 10, 20, 64 with the
+    1.1.1 and 1.3.0 GGUFs), so k = n + 1 is requested; callers trim with ``trim_to_tokens``.
+    Before this fix, replies that reached the cap were reported as mismatches.
+    """
+    n = n + 1
     with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as f:
         f.write(prompt)
         pfile = f.name
@@ -152,7 +165,8 @@ def main() -> int:
         for ref in refs:
             row = {"user": ref["messages"][-1]["content"], "turns": len(ref["messages"]), "torch": ref["torch"]}
             if a.llama_bin:
-                row["llama_cpp"] = llama_greedy(Path(a.llama_bin).expanduser(), path, ref["prompt"], a.max_new_tokens)
+                row["llama_cpp"] = trim_to_tokens(
+                    llama_greedy(Path(a.llama_bin).expanduser(), path, ref["prompt"], a.max_new_tokens), tok, a.max_new_tokens)
             if oname:
                 greedy = {"temperature": 0, "repeat_penalty": 1.0, "num_predict": a.max_new_tokens, "seed": 0}
                 chat = http_json(f"{a.ollama_host}/api/chat", {"model": oname, "stream": False, "messages": ref["messages"], "options": greedy})

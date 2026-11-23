@@ -32,12 +32,15 @@ class TransformerBlock(nn.Module):
         d_ff: int,
         norm_eps: float = 1e-5,
         dropout: float = 0.0,
+        resid_dropout: float = 0.0,
     ):
         super().__init__()
         self.attn_norm = RMSNorm(d_model, eps=norm_eps)
         self.attn = MultiHeadAttention(d_model, n_heads, dropout=dropout)
         self.ffn_norm = RMSNorm(d_model, eps=norm_eps)
         self.ffn = SwiGLU(d_model, d_ff)
+        # No parameters, so checkpoints and GGUF exports are unaffected; inactive in eval mode.
+        self.resid_dropout = nn.Dropout(resid_dropout) if resid_dropout > 0.0 else nn.Identity()
 
     def forward(
         self,
@@ -58,8 +61,8 @@ class TransformerBlock(nn.Module):
             kv_cache=kv_cache,
             use_cache=use_cache,
         )
-        x = x + attn_out
+        x = x + self.resid_dropout(attn_out)
 
         # Pre-norm SwiGLU FFN with residual connection
-        x = x + self.ffn(self.ffn_norm(x))
+        x = x + self.resid_dropout(self.ffn(self.ffn_norm(x)))
         return x, new_cache

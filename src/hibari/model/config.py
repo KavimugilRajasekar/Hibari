@@ -17,7 +17,8 @@ class ModelConfig:
     n_heads: int = 4
     d_ff: int = 384
     norm_eps: float = 1e-5
-    dropout: float = 0.0
+    dropout: float = 0.0          # on attention weights
+    resid_dropout: float = 0.0    # on each sub-layer output before the residual add (GPT-2 style); 0 = off
     tie_embeddings: bool = True
     rope_theta: float = 10000.0
     model_name: str = "Hibari-Koto"
@@ -29,7 +30,7 @@ class ModelConfig:
         """Raise ``ValueError`` listing every inconsistent hyper-parameter.
 
         Checked: positive sizes, ``d_model`` divisible by ``n_heads``, an even
-        head dimension (RoPE rotates pairs), dropout in [0, 1), positive
+        head dimension (RoPE rotates pairs), dropout and resid_dropout in [0, 1), positive
         ``norm_eps`` and ``rope_theta``. Called on construction, so a bad YAML
         fails when it is loaded instead of deep inside the first forward pass.
         """
@@ -44,8 +45,9 @@ class ModelConfig:
                 problems.append(f"d_model ({self.d_model}) must be divisible by n_heads ({self.n_heads})")
             elif (self.d_model // self.n_heads) % 2:
                 problems.append(f"head_dim ({self.d_model // self.n_heads}) must be even for RoPE")
-        if not 0.0 <= self.dropout < 1.0:
-            problems.append(f"dropout must be in [0, 1), got {self.dropout}")
+        for name in ("dropout", "resid_dropout"):
+            if not 0.0 <= getattr(self, name) < 1.0:
+                problems.append(f"{name} must be in [0, 1), got {getattr(self, name)}")
         if self.norm_eps <= 0:
             problems.append(f"norm_eps must be > 0, got {self.norm_eps}")
         if self.rope_theta <= 0:

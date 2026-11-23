@@ -146,3 +146,35 @@ def test_p9_engine_config_templates_match_code():
     rel = yaml.safe_load((tdir / "release" / "template.yaml").read_text())
     for k in ("model", "version", "weights_version", "system_prompt", "checkpoint", "tokenizer_dir", "inference_config"):
         assert k in rel
+
+
+
+def test_checkpoint_saved_before_a_new_config_field_still_validates(tmp_path):
+    """A checkpoint written before resid_dropout existed (all Koto weights up to 1.3.0) must still
+    match its model config; engine 0.4.1 reported 'checkpoint vs config differ' without the fix."""
+    p = make_repo(tmp_path)
+    ck = torch.load(tmp_path / "ckpt.pt", map_location="cpu", weights_only=False)
+    ck["config"].pop("resid_dropout")
+    torch.save(ck, tmp_path / "ckpt.pt")
+    text = p.read_text()
+    old_sha = yaml.safe_load(text)["checkpoint_sha256"]
+    p.write_text(text.replace(old_sha, sha256_file(tmp_path / "ckpt.pt")))
+    found = validate_profile(ModelProfile.load(p, root=tmp_path), check_gguf=False)
+    assert "checkpoint:config" not in {f.code for f in errors(found)}, [str(f) for f in errors(found)]
+
+
+def test_unknown_modelfile_variant_is_a_finding_not_a_crash(released):
+    # next(...) over the GGUF list raised a bare StopIteration for a variant the profile does not list
+    found = validate_profile(released, check_hashes=False, modelfile_variant="q3_nope")
+    assert any(f.code == "modelfile" and f.level == "error" and "q3_nope" in f.message for f in found), [str(f) for f in found]
+
+
+def test_export_with_no_variant_produced_is_an_export_error(tmp_path, monkeypatch):
+    # every requested variant skipped (no llama-quantize): next(...) raised a bare StopIteration
+    p = make_repo(tmp_path)
+    prof = ModelProfile.load(p, root=tmp_path)
+    monkeypatch.setattr(export_script.shutil, "which", lambda _: None)
+    prof.gguf_files.append(type(prof.gguf_files[0])(variant="q8_0", file="T-Q8_0.gguf"))
+    with pytest.raises(export_script.ExportError, match="no GGUF"):
+        export_script.export_profile(prof, ["q8_0"], None, force=False)
+    assert not (tmp_path / "gguf" / "Modelfile").exists()

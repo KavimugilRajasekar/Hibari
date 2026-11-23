@@ -168,7 +168,10 @@ def export_profile(profile: ModelProfile, variants: List[str], llama_quantize: O
                                  "checkpoint": profile.relpath(ck),
                                  "checkpoint_sha256": profile.checkpoint_sha256,
                                  "tokenizer_sha256": profile.tokenizer_sha256})
-    first = next(g for g in profile.gguf_files if g.variant in res["files"] and res["files"][g.variant].get("status") == "ok")
+    first = next((g for g in profile.gguf_files if g.variant in res["files"] and res["files"][g.variant].get("status") == "ok"), None)
+    if first is None:
+        detail = {v: res["files"].get(v, {}).get("reason") or res["files"].get(v, {}).get("status") for v in variants}
+        raise ExportError(f"no GGUF variant was exported ({detail}); the Modelfile was not written")
     (outdir / "Modelfile").write_text(render_modelfile(profile, first.file), encoding="utf-8")
     print(f"Modelfile -> {outdir / 'Modelfile'} (FROM {first.file})")
     return res

@@ -211,3 +211,112 @@ def test_t5_resume_continues_from_last_checkpoint(tmp_path, model, tok):
     assert [r["step"] for r in hist["history"] if "train_loss" in r] == [1, 2, 3, 4]
     for a, b in zip(full.parameters(), resumed.parameters()):
         assert torch.allclose(a, b, atol=1e-6)
+
+
+# ───────────── compare_backends: llama-completion -n k prints k-1 tokens (2026-11-23) ─────────────
+
+def _load_compare_backends():
+    import importlib.util
+    from pathlib import Path
+    path = Path(__file__).resolve().parents[1] / "scripts" / "engine" / "compare_backends.py"
+    spec = importlib.util.spec_from_file_location("compare_backends_under_test", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+class _WordTok:
+    def encode(self, text):
+        return text.split()
+
+    def decode(self, ids, skip_special_tokens=True):
+        return " ".join(ids)
+
+
+def test_llama_greedy_requests_one_extra_token(monkeypatch, tmp_path):
+    cb = _load_compare_backends()
+    seen = {}
+
+    class _Proc:
+        returncode, stdout, stderr = 0, "a b c", ""
+
+    def fake_run(cmd, **kw):
+        seen["n"] = cmd[cmd.index("-n") + 1]
+        return _Proc()
+
+    monkeypatch.setattr(cb.subprocess, "run", fake_run)
+    cb.llama_greedy(tmp_path, tmp_path / "m.gguf", "prompt", 64)
+    assert seen["n"] == "65"
+
+
+def test_trim_to_tokens_compares_backends_at_the_same_length():
+    cb = _load_compare_backends()
+    tok = _WordTok()
+    assert cb.trim_to_tokens("one two three four", tok, 3) == "one two three"
+    assert cb.trim_to_tokens(" one two ", tok, 3) == "one two"
+
+
+# ───────────── 2026-11-23 review: safety contractions, critic word matching, prompt budget ─────────────
+
+@pytest.mark.parametrize("msg", ["I'll hurt him", "i'll beat up my brother", "I’ll hurt her tomorrow",
+                                 "I'd kill him if I could", "i'd stab my boss"])
+def test_safety_catches_threats_written_with_contractions(msg):
+    # "i'll" / "i'd" were not expanded, so the first-person intent pattern ("i will", ...) never matched
+    from hibari.inference.safety import SafetyCategory, assess_message
+    assert assess_message(msg).category is SafetyCategory.VIOLENCE, msg
+
+
+@pytest.mark.parametrize("msg", ["I'll shoot you a message later", "i'll shoot you a text tonight",
+                                 "I'd never hurt you", "I'll kill time at the mall", "I'd kill for a coffee",
+                                 "i'll make him pay for dinner", "I'll hurt your feelings if I say it"])
+def test_safety_leaves_benign_contractions_alone(msg):
+    from hibari.inference.safety import SafetyCategory, assess_message
+    assert assess_message(msg).category is SafetyCategory.NONE, msg
+
+
+def _critic_analysis(text):
+    from hibari.inference.intent import analyze_message
+    return analyze_message(text)
+
+
+def test_topic_from_nowhere_uses_whole_words():
+    # "war" was treated as already mentioned because the context contained "award"
+    from hibari.inference.reranking import ReplyCritic
+    user = "I won an award at school today!"
+    adj = dict(ReplyCritic().judge("That reminds me of the war.", _critic_analysis(user), user))
+    assert any(k.startswith("topic_from_nowhere:war") for k in adj), adj
+
+
+def test_topic_from_nowhere_does_not_depend_on_word_order():
+    # only the first topic word was checked: "drugs ... war" was penalised, "war ... drugs" was not
+    from hibari.inference.reranking import ReplyCritic
+    user = "We watched a film about the war."
+    for reply in ("The war was bad, and so were the drugs.", "The drugs were bad, and so was the war."):
+        adj = dict(ReplyCritic().judge(reply, _critic_analysis(user), user))
+        assert not any(k.startswith("topic_from_nowhere") for k in adj), (reply, adj)
+
+
+def test_unknown_entities_uses_whole_words():
+    # "Sam" counted as known because the context contained "same"
+    from hibari.inference.reranking import ReplyCritic
+    assert ReplyCritic().unknown_entities("I think you should ask Sam about it.", "same here, i agree") == ["Sam"]
+    assert ReplyCritic().unknown_entities("I think you should ask Sam about it.", "my friend sam said hi") == []
+
+
+def test_prompt_budget_matches_generation_reserve(model, tok):
+    # build_prompt_ids reserved the full max_new_tokens while generation reserves at most half the
+    # window, so long requests lost their start (e-mail requests: 160 new tokens in a 256 window)
+    s = HibariChatSession(model, tok, system_prompt="Be kind.")
+    s.add_user_message("hello world how are you")
+    full = tok.encode(tok.apply_chat_template(s.messages, add_generation_prompt=True))
+    assert 64 - 40 < len(full) <= 64 // 2      # 29 tokens: over the old budget (24), within the new one (32)
+    assert s.build_prompt_ids(max_new_tokens=40) == full     # generation reserves min(40, 64 // 2) = 32
+
+
+def test_prompt_budget_never_goes_negative(model, tok):
+    s = HibariChatSession(model, tok, system_prompt="Be kind.")
+    s.add_user_message("tell me a long story about the sea and the sky " * 30)
+    ids = s.build_prompt_ids(max_new_tokens=10 * model.config.max_seq_len)
+    assert 0 < len(ids) <= model.config.max_seq_len // 2
+    assert ids[:1] == tok.encode("<|system|>")
+    assert ids[-len(tok.encode("<|eos|>\n<|assistant|>\n")):] == tok.encode("<|eos|>\n<|assistant|>\n")

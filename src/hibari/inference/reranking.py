@@ -101,6 +101,13 @@ _COMMON_CAPITALISED = {"i", "i'm", "i've", "i'll", "i'd", "ok", "okay", "ai", "m
                        "june", "july", "august", "september", "october", "november", "december", "subject", "dear", "regards",
                        "best", "thanks", "thank", "sincerely", "hi", "hello", "hey", "your", "name", "manager", "team"}
 
+def _has_word(word: str, text: str) -> bool:
+    """``word`` occurs in ``text`` as a whole word, singular or plural (both lowercase):
+    "war" is not in "award", "sam" is not in "same", "weapon" is in "weapons"."""
+    stem = word[:-1] if word.endswith("s") and len(word) > 3 else word
+    return re.search(rf"(?<![a-z0-9]){re.escape(stem)}s?(?![a-z0-9])", text) is not None
+
+
 INTENT_MAX_WORDS = {Intent.GREETING: 30, Intent.THANKS: 25, Intent.FAREWELL: 25, Intent.APOLOGY: 30, Intent.COMPLIMENT: 30,
                     Intent.HOSTILE: 40, Intent.NOISE: 30, Intent.IDENTITY: 45, Intent.EMOTIONAL: 70, Intent.EMAIL_REQUEST: 220}
 DEFAULT_MAX_WORDS = 90
@@ -272,9 +279,12 @@ class ReplyCritic:
 
         if re.search(HUMAN_CLAIM, low) and not re.search(HUMAN_CLAIM, user_low):
             out.append(("claims_human_experience", -w.human_claim))
-        topic = re.search(OUT_OF_NOWHERE_TOPICS, low)
-        if topic and topic.group(0) not in ctx_low:
-            out.append((f"topic_from_nowhere:{topic.group(0)}", -w.out_of_nowhere_topic))
+        # Whole words ("war" is not mentioned by "award"). If the conversation is already on one of the
+        # reply's topics, related ones are fine ("What was the Holocaust?" -> "... a genocide"); this no
+        # longer depends on which topic word comes first in the reply.
+        topics = [m.group(0) for m in re.finditer(OUT_OF_NOWHERE_TOPICS, low)]
+        if topics and not any(_has_word(t, ctx_low) for t in topics):
+            out.append((f"topic_from_nowhere:{topics[0]}", -w.out_of_nowhere_topic))
         unknown = self.unknown_entities(reply, context)
         if unknown:
             out.append((f"unknown_entities:{','.join(unknown[:3])}", -w.unknown_entity * min(2, len(unknown))))
@@ -310,7 +320,7 @@ class ReplyCritic:
         found = []
         for m in re.finditer(r"(?<![.!?:\n]\s)(?<!^)(?<![.!?:\n])\b([A-Z][a-z]{2,})\b", reply.strip()):
             w = m.group(1).lower()
-            if w in _COMMON_CAPITALISED or w in self.identity_terms or w in ctx:
+            if w in _COMMON_CAPITALISED or w in self.identity_terms or _has_word(w, ctx):
                 continue
             found.append(m.group(1))
         return found

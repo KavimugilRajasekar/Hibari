@@ -34,12 +34,16 @@ def _stop_ids(tokenizer: HibariTokenizer) -> set[int]:
     }
 
 
+def reply_reserve(max_ctx: int, max_new_tokens: int) -> int:
+    """Tokens of the window kept free for the reply: ``max_new_tokens``, at most half the window.
+    Shared by generation and ``HibariChatSession.build_prompt_ids`` so both trim the same way."""
+    return max(0, min(max_new_tokens, max_ctx // 2))
+
+
 def _truncate_prompt(token_ids: List[int], max_ctx: int, max_new_tokens: int) -> List[int]:
-    # Reserve room for the reply (at most half the window) and left-truncate
-    # only a prompt that would not leave that room. Generation then stops
-    # when the window is full.
-    reserve = min(max_new_tokens, max_ctx // 2)
-    budget = max_ctx - reserve
+    # Reserve room for the reply and left-truncate only a prompt that would
+    # not leave that room. Generation then stops when the window is full.
+    budget = max_ctx - reply_reserve(max_ctx, max_new_tokens)
     return token_ids[-budget:] if len(token_ids) > budget else token_ids
 
 

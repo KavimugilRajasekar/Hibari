@@ -47,7 +47,7 @@ import torch
 
 from hibari.data.formatting import DEFAULT_SYSTEM_PROMPT
 from hibari.data.tokenizer import HibariTokenizer, escape_special_tokens
-from hibari.inference.generation import generate_batch, generate_tokens
+from hibari.inference.generation import generate_batch, generate_tokens, reply_reserve
 from hibari.inference.intent import Intent, MessageAnalysis, analyze_message
 from hibari.inference.normalization import normalize_informal
 from hibari.inference.reranking import Candidate, CriticWeights, ReplyCritic, reply_logprobs, score_candidates
@@ -142,7 +142,10 @@ class HibariChatSession:
     def build_prompt_ids(self, max_new_tokens: int, messages: Optional[List[Dict[str, str]]] = None) -> List[int]:
         """Chat-format the history, dropping the oldest turns to fit the context."""
         messages = self.messages if messages is None else messages
-        budget = self.model.config.max_seq_len - max_new_tokens
+        # Same reserve as generation (``reply_reserve``): at most half the window. Reserving the full
+        # max_new_tokens cut the start of long requests (e-mail: 160 of 256) although generation would
+        # have accepted them, and a max_new_tokens >= the window gave a zero or negative budget.
+        budget = self.model.config.max_seq_len - reply_reserve(self.model.config.max_seq_len, max_new_tokens)
         system = messages[:1]
         turns = messages[1:]
         while True:

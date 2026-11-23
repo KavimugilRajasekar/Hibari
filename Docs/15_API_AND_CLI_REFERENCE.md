@@ -68,7 +68,7 @@ python training/train.py --train-config configs/training/koto_1.1.0.yaml 2>&1 | 
 | `--model-config` | `configs/model/koto.yaml` |
 | `--train-config` | `configs/training/koto.yaml` |
 | `--tokenizer-dir` | `tokenizer` |
-| `--data-cache-dir` | `data_cache_dir` from the training config, else `data/processed` |
+| `--data-cache-dir` | only for configs without `data_cache_dir` (a different directory is refused); the data must match `data_fingerprint` when the config has one |
 | `--max-steps` | from config |
 | `--checkpoint` | none (random init); a `.pt` path continues from those weights |
 
@@ -171,6 +171,20 @@ Header, metadata, tensors, tokenizer parity and greedy parity against PyTorch.
 | `--tokenizer-dir` | `models/Koto/tokenizer` |
 | `--max-new-tokens` | 48 |
 | `--report` | `release/inference_parity.json` |
+
+### scripts/engine/verify_architecture.py
+Checks the internal architecture of trained checkpoints, independently of llama.cpp: parameter
+count = formula = unique tensors, tied storage, no biases, finite weights; causality, KV-cache
+incremental decoding = full forward, batch independence, eval determinism, masked loss; for each
+`--gguf <index>=<F32/F16 file>` the NumPy reference runtime (`hibari.export.gguf_reference`) must
+reproduce the PyTorch logits and greedy tokens (proves the file holds those weights); optional
+held-out loss with `--records`. Exit code 1 on any failure.
+
+| Flag | Meaning |
+|---|---|
+| `--checkpoint` (repeatable), `--tokenizer-dir`, `--report` | required |
+| `--gguf <i>=<file>` | GGUF to check against the i-th checkpoint (repeatable) |
+| `--records`, `--greedy-tokens` | held-out conversations JSON; greedy length (24) |
 
 ### scripts/engine/verify_llama_cpp_python.py
 Re-runs the parity prompts through llama-cpp-python (`pip install llama-cpp-python`).

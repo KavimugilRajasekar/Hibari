@@ -54,3 +54,8 @@ See doc 23 §3. Koto 1.1.1 result: tokenizer 23/23 on every variant; greedy
 PyTorch = llama.cpp = Ollama chat = Ollama raw on 11/11 prompts for F32,
 F16 and Q8_0; Q4_K_M 6/11 (llama.cpp) and 8/11 (Ollama), the expected
 effect of 4-bit weights on a 6M model; chat-template token counts 11/11.
+
+`llama-completion -n k` prints k-1 tokens (measured 2026-11-23), so the script requests n+1 and trims
+both outputs to n tokens (engine 0.4.1). Before that, replies that reached the cap counted as mismatches:
+Koto 1.3.0 F32 showed 9/11; with the fix F32 and F16 are 11/11, Q8_0 10/11, Q4_K_M 7/11
+(`models/Koto/outputs/evaluation/backend_parity_1.3.0_r2.json`).

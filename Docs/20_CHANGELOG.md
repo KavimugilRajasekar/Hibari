@@ -5,10 +5,44 @@ Model-specific changes to Koto are recorded in `models/Koto/CHANGELOG.md`.
 
 ---
 
-## [Unreleased] — 2026-11-23
+## [0.4.1] — 2026-11-23: fixes from the Koto 1.3.0 release
+
+### Added
+- `ModelConfig.resid_dropout` (default 0.0): dropout on each sub-layer output before the residual
+  add. No parameters, so checkpoints and GGUF exports are unchanged; old models behave identically
+  (PyTorch outputs of 1.3.0 verified identical, 11/11).
+
+- `scripts/engine/verify_architecture.py`: architecture and GGUF-provenance verification of trained
+  checkpoints (see doc 15); run on Koto 1.0.0, 1.1.0, 1.2.0 and 1.3.0 and their nine F32/F16 GGUFs.
+- `tests/test_architecture_invariants.py` (47 tests): causality, KV cache, RoPE relative-position and
+  extension, RMSNorm, loss masking, `HibariKotoLM.generate`, `generate_batch` rows that stop early,
+  `evaluate_records`, `InferenceEngine`, checkpoints, `ModelConfig` errors, quantization helpers and the
+  NumPy GGUF reference runtime (which no test or script used before). Engine line coverage 83.1% → 88.3%
+  (stdlib `sys.monitoring` measurement; no new dependency).
+
+### Fixed
+- `load_checkpoint` returns the model in eval mode. With `resid_dropout` > 0 a train-mode model gave a
+  different answer on every call (scripts that use the loaded model directly, e.g. `verify_gguf.py`).
+- Release validation no longer reports "checkpoint vs config differ" for a checkpoint saved before
+  a `ModelConfig` field existed; the missing field is compared as its default.
+- `compare_backends.py`: `llama-completion -n k` prints k-1 tokens; the script now requests n+1 and
+  compares both backends at n tokens (1.3.0 F32 parity 9/11 → 11/11).
+- Safety layer: `i'll` / `i'd` are expanded before matching, so "I'll hurt him", "I'll beat up my
+  brother" and "I'd kill him" are flagged as violence (they were not); "I'll shoot you a message" is
+  no longer flagged. Detection only; the reviewed safety responses are unchanged.
+- Reply critic: `topic_from_nowhere` and `unknown_entities` match whole words ("war" is not mentioned
+  by "award", "Sam" not by "same"); `topic_from_nowhere` no longer depends on which topic word comes
+  first in the reply.
+- `HibariChatSession.build_prompt_ids` reserves the same room for the reply as generation
+  (`reply_reserve`: `max_new_tokens`, at most half the window). It reserved the full `max_new_tokens`,
+  so e-mail requests (160 new tokens in a 256 window) lost the start of a long message, the
+  instruction included, and `max_new_tokens` >= the window gave a zero or negative budget.
+- `validate_profile(modelfile_variant=<unknown>)` and `export.py --profile` with no variant produced
+  report an error instead of raising a bare `StopIteration`.
+
 
 ### Documentation
-- Koto 1.3.0 (29.4M) recorded as trained by the owner with engine 0.4.0 (`91db4a2`); not evaluated.
+- Koto 1.3.0 (29.4M) recorded as trained by the owner with engine 0.4.0 (`91db4a2`); evaluated, not accepted.
   The run's recorded training data does not match the prepared 1.3.0 mix (see `models/Koto/CHANGELOG.md`).
 - Architecture diagrams added in `Docs/assets/` (kebab-case names, indexed in `Docs/assets/README.md`)
   and embedded in `README.md` and `architecture/04_MODEL_DESIGN.md`; checked against `src/hibari/model/`.

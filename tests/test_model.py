@@ -161,3 +161,44 @@ def test_swiglu_matches_formula():
     ref = f.down_proj(torch.nn.functional.silu(f.gate_proj(x)) * f.up_proj(x))
     assert torch.allclose(f(x), ref)
     assert f.gate_proj.bias is None and f.up_proj.bias is None
+
+
+# ───────────── residual dropout (engine 0.4.1, for Koto 1.3.1 regularisation) ─────────────
+
+def _tiny_cfg(**kw):
+    from hibari.model.config import ModelConfig
+    return ModelConfig(vocab_size=64, max_seq_len=16, d_model=32, n_layers=2, n_heads=2, d_ff=64, **kw)
+
+
+def test_resid_dropout_defaults_off_and_adds_no_parameters():
+    from hibari.model.llm import HibariKotoLM
+    torch.manual_seed(0)
+    a = HibariKotoLM(_tiny_cfg())
+    b = HibariKotoLM(_tiny_cfg(resid_dropout=0.2))
+    assert _tiny_cfg().resid_dropout == 0.0
+    assert a.state_dict().keys() == b.state_dict().keys()     # old checkpoints load into either
+
+
+def test_resid_dropout_is_active_in_training_and_off_in_eval():
+    from hibari.model.llm import HibariKotoLM
+    torch.manual_seed(0)
+    m = HibariKotoLM(_tiny_cfg(resid_dropout=0.5))
+    x = torch.randint(0, 64, (2, 8))
+    m.train()
+    first = m(x)
+    first = first[0] if isinstance(first, tuple) else first
+    second = m(x)
+    second = second[0] if isinstance(second, tuple) else second
+    assert not torch.allclose(first, second)
+    m.eval()
+    with torch.no_grad():
+        e1, e2 = m(x), m(x)
+    e1 = e1[0] if isinstance(e1, tuple) else e1
+    e2 = e2[0] if isinstance(e2, tuple) else e2
+    assert torch.equal(e1, e2)
+
+
+def test_resid_dropout_is_validated():
+    import pytest
+    with pytest.raises(ValueError, match="resid_dropout"):
+        _tiny_cfg(resid_dropout=1.0)

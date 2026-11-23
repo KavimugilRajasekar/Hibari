@@ -34,6 +34,7 @@ class HibariKotoLM(nn.Module):
                     d_ff=config.d_ff,
                     norm_eps=config.norm_eps,
                     dropout=config.dropout,
+                    resid_dropout=config.resid_dropout,
                 )
                 for _ in range(config.n_layers)
             ]
