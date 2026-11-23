@@ -19,7 +19,9 @@ Author: **[Kavimugil Rajasekar](https://kavimugilrajasekar.github.io)**
 
 Rather than fine-tuning pre-existing weights or relying on high-level prebuilt model wrappers, Hibari is implemented from foundational mathematical principles. Every core component—from Rotary Position Embeddings (RoPE), Root Mean Square Normalization (RMSNorm), and SwiGLU feed-forward networks to custom Byte-Pair Encoding (BPE), autoregressive inference engines, and native binary GGUF export—is written directly.
 
-**Hibari Koto** (`Hibari-Koto`) is the first conversational model developed and trained under the Hibari architecture. Built for friendly, empathetic dialogue and simple writing help, it has 6.16M parameters, a 4,096-token byte-level BPE vocabulary, and is trained with supervised fine-tuning (SFT) loss masking on a blend of open conversation, writing-task and hand-written datasets.
+**Hibari Koto** is the first conversational model developed and trained under the Hibari architecture: a friendly, empathetic chat model for short conversations and simple writing help. Its current release is **Koto 1.3.1 — `Hibari-Koto1.3.1:29M`**, a 29.4M-parameter model with a 4,096-token byte-level BPE vocabulary, trained with supervised fine-tuning (SFT) loss masking on 93,509 conversations.
+
+**Get it:** [Hugging Face `kavimugil-r/Hibari-Koto`](https://huggingface.co/kavimugil-r/Hibari-Koto) (GGUF F32 / F16 / Q8_0 / Q4_K_M, PyTorch checkpoint) · `ollama run kavimugil-r/Hibari-Koto1.3.1:29M` · [project page](https://kavimugilrajasekar.github.io/hibari/index.html)
 
 The project is split into two Git repositories:
 
@@ -28,35 +30,32 @@ The project is split into two Git repositories:
 
 ---
 
-## Model Specifications: Hibari Koto (`Hibari-Koto`)
+## Model Specifications: `Hibari-Koto1.3.1:29M`
 
-| Specification | Hibari Koto | Technical Context |
-|---|---|---|
-| Parent Architecture | Hibari | Decoder-only causal Transformer (LLaMA-style) |
-| Model Identifier | `Hibari-Koto` | Friendly conversation and writing help |
-| Trainable Parameters | **6,163,712 (~6.16 Million)** | Trains and runs on a CPU |
-| Hidden Dimension (d_model) | **256** | Activation width per layer |
-| Transformer Layers | **6** | Stacked causal Transformer blocks |
-| Attention Heads | **8** | Head dimension = 32, full multi-head (no grouped KV) |
-| Feed-Forward Network | **SwiGLU (d_ff = 768)** | 3x expansion with Swish gating |
-| Position Encoding | RoPE (theta = 10,000.0) | Adjacent-pair rotation (llama.cpp `ROPE_TYPE_NORM`) |
-| Normalization | Pre-RMSNorm (eps = 1e-5) | Scale-invariant layer normalization |
-| Vocabulary Size | **4,096 tokens** | Byte-level BPE with 7 chat special tokens |
-| Max Context Window | **256 tokens** | Includes the system prompt, history and the reply |
-| Weight Tying | Enabled | `lm_head` shares the token embedding matrix |
-| Training Objective | **SFT target masking (`targets = -100`)** | Loss on assistant tokens only |
-| Training Data (1.1.0 mix) | **108,850 training conversations** | Open dialogue corpora, writing-task corpora and hand-written Koto data — see [Dataset Catalog](models/Koto/docs/16_DATASET_CATALOG.md) |
-| Validation Perplexity (open conversation) | **20.86** (1.0.0) / 22.39 (1.1.0) | Same held-out split for both; lower is better |
-| Behaviour Suite Pass Rate | 16.7 % (1.0.0) / **53.7 %** (1.1.0) | 54 held-out cases, routed, greedy — see [Development Report](models/Koto/docs/19_KOTO_1.1.0_DEVELOPMENT_REPORT.md) |
-| Export Formats | **GGUF: F32, F16, Q8_0, Q4_K_M** | llama.cpp and Ollama (output parity verified against PyTorch) |
-| GGUF File Size | **24.8 MB (F32) / 12.5 MB (F16) / 6.7 MB (Q8_0) / 4.0 MB (Q4_K_M)** | Small enough for any laptop |
+| Specification | Koto 1.3.1 (current) | Koto 1.1.x (previous) | Technical Context |
+|---|---|---|---|
+| Parent Architecture | Hibari | Hibari | Decoder-only causal Transformer (LLaMA-style) |
+| Trainable Parameters | **29,368,832 (~29.4M)** | 6,163,712 (~6.16M) | — |
+| Hidden Dimension (d_model) | **512** | 256 | Activation width per layer |
+| Transformer Layers | **8** | 6 | Stacked causal Transformer blocks |
+| Attention Heads | **8** (head dim 64) | 8 (head dim 32) | Full multi-head (no grouped KV) |
+| Feed-Forward Network | **SwiGLU (d_ff = 1536)** | SwiGLU (d_ff = 768) | 3x expansion with Swish gating |
+| Residual dropout | **0.1** | 0 | engine 0.4.1 |
+| Position Encoding | RoPE (θ = 10,000) | RoPE (θ = 10,000) | Adjacent-pair rotation (llama.cpp `ROPE_TYPE_NORM`) |
+| Normalization | Pre-RMSNorm (ε = 1e-5) | Pre-RMSNorm | Scale-invariant layer normalization |
+| Vocabulary Size | **4,096 tokens** | 4,096 | Byte-level BPE with 7 chat special tokens |
+| Max Context Window | **256 tokens** | 256 | Includes the system prompt, history and the reply |
+| Weight Tying | Enabled | Enabled | `lm_head` shares the token embedding matrix |
+| Training | 12,000 steps, one CUDA GPU, 1.72 h | CPU | SFT loss on assistant tokens only |
+| Best validation loss | **2.781** (ppl 16.1, step 11,500) | ppl 22.39 (other val set) | lower is better |
+| Behaviour suite (52 cases, seeds 0 1 2) | **0.628** | 0.660 | higher is better; 1.3.1 is weaker at rewriting (0.33 vs 0.67) |
+| Conversation suite (15 cases, seeds 0 1 2) | **0.733** | 0.645 | higher is better |
+| GGUF sizes | **112.2 / 56.2 / 29.9 / 17.5 MiB** (F32 / F16 / Q8_0 / Q4_K_M) | 24.8 / 12.5 / 6.7 / 4.0 MB | llama.cpp parity with PyTorch: F32 / F16 / Q8_0 11/11, Q4_K_M 9/11 |
 
-> **1.1.1** (`configs/release/koto_1.1.1.yaml`) is the current release candidate: the 1.1.0
-> weights with the 0.3.0 conversational layer. **1.0.0** is `checkpoints/koto_start`. **1.1.0**
-> (`checkpoints/koto_1.1.0`) was trained and evaluated:
-> much better at grammar correction and rewriting, somewhat better at
-> multi-turn dialogue, slightly worse at open chit-chat, and it still
-> invents facts. GGUF files exist for 1.0.0 only.
+> **1.3.1** (`models/Koto/configs/release/koto_1.3.1.yaml`) is the current release, published on
+> 2026-11-23 by the author's decision although it did not meet the project's acceptance rule for the
+> behaviour suite (rewriting regressed); see `models/Koto/docs/34_KOTO_1.3.1_RELEASE_REPORT.md`.
+> **1.1.1** is the previous release, **1.3.0** was trained on the wrong data and not released.
 
 ---
 

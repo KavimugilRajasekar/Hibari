@@ -12,7 +12,9 @@ One YAML per model version in the model repository
 (`configs/release/<model>_X.Y.Z.yaml`, template `hibari/configs/release/template.yaml`):
 version, weights version, training status, identity, system prompt (and the
 one used in training), model / inference config paths, checkpoint and
-tokenizer with SHA-256, GGUF directory and files with SHA-256.
+tokenizer with SHA-256, GGUF directory and files with SHA-256, and optionally
+`ollama_name` — the published Ollama name used in the generated Modelfile's usage lines
+(default `hibari-<model>:<version>`; Koto 1.3.1: `kavimugil-r/Hibari-Koto1.3.1:29M`).
 
 `InferenceEngine.from_profile(path)` loads the checkpoint and tokenizer and
 creates sessions with the profile's system prompt, identity terms and

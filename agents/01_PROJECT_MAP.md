@@ -44,10 +44,12 @@ Git-ignored, local only: `checkpoints/`, `data/processed*`, `*.gguf`, `archive/*
 | Item | Value |
 |---|---|
 | Engine version | 0.4.1 (branch `feature/koto-1.3.0`) |
-| Current Koto release | 1.1.1 (weights 1.1.0) — `configs/release/koto_1.1.1.yaml` |
+| Current Koto release | **1.3.1** `Hibari-Koto1.3.1:29M` (29.4M, EXP-0007) — `configs/release/koto_1.3.1.yaml`; released 2026-11-23 by the owner's decision although it failed the EXP-0007 rule (behaviour 0.628 vs 0.660, rewriting 0.333; conversation 0.733 vs 0.645) — Koto docs/34. Published: HF `kavimugil-r/Hibari-Koto`, Ollama `kavimugil-r/Hibari-Koto1.3.1:29M` |
+| Previous release | 1.1.1 (weights 1.1.0) — `configs/release/koto_1.1.1.yaml` |
 | Trained, not released | 1.2.0 — `configs/release/koto_1.2.0.yaml` (EXP-0004): rewriting regression, see Koto docs/32 |
 | Trained, not accepted | 1.3.0 — 29.4M (EXP-0006, `checkpoints/koto_1.3.0_large/`): trained on other data than its config named; behaviour 0.558 vs 0.660, reformulation 0.333; GGUFs in `releases/exported/1.3.0/` for testing only |
-| Next Koto version | 1.3.1 — retrain of the 29.4M model on `data/processed_1.3.0` with a pinned data fingerprint and `resid_dropout 0.1` (EXP-0007, `configs/training/koto_1.3.1_large.yaml`); training NOT STARTED |
-| Branches / tags | Koto `release/1.3.0` (local work), `release/1.2.0`, `release/1.1.0`, tags `v1.1.0` `v1.1.1`; Hibari `feature/koto-1.1.0`, tag `engine-v0.3.0`; both `main` branches are behind |
-| Legacy trap | `models/Koto/releases/exported/*.gguf` hold **1.0.0** weights; use `exported/1.1.1/` |
-| Environment | Python venv `.venv`; llama.cpp binaries in `~/llama.cpp` (need `LD_LIBRARY_PATH=~/llama.cpp`); Ollama CLI installed (the system `ollama.service` was broken on 2026-11-22: missing `/usr/share/ollama`) |
+| Next Koto version | not prepared; the measured weakness is rewriting (1.3.1: 0.333) — raising the rewriting share in the data is the owner's decision |
+| Hubs | HF model `kavimugil-r/Hibari-Koto` (public), HF dataset `kavimugil-r/koto-data` (private, `processed_1.3.0`); Ollama `kavimugil-r/Hibari-Koto1.3.1:29M`; cards in Koto `releases/hub/` |
+| Branches / tags | Koto `release/1.3.0` (local work), `release/1.2.0`, `release/1.1.0`, tags `v1.1.0` `v1.1.1` `v1.3.1`; Hibari `feature/koto-1.1.0`, tag `engine-v0.3.0`; both `main` branches are behind |
+| Legacy trap | `models/Koto/releases/exported/*.gguf` hold **1.0.0** weights; use `exported/1.3.1/` |
+| Environment | Python venv `.venv`; llama.cpp binaries in `~/llama.cpp` (need `LD_LIBRARY_PATH=~/llama.cpp`); Ollama CLI installed (the system `ollama.service` is broken: missing `/usr/share/ollama` and `llama-server`; for `ollama create/push` run a user server: `OLLAMA_HOST=127.0.0.1:11435 ollama serve`) |

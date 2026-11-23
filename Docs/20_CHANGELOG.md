@@ -12,6 +12,10 @@ Model-specific changes to Koto are recorded in `models/Koto/CHANGELOG.md`.
   add. No parameters, so checkpoints and GGUF exports are unchanged; old models behave identically
   (PyTorch outputs of 1.3.0 verified identical, 11/11).
 
+- Release profiles may set `ollama_name` (the published Ollama model name); `render_modelfile` uses it
+  in the Modelfile's `ollama create` / `ollama run` lines. Default unchanged (`hibari-<model>:<version>`).
+  Used by Koto 1.3.1 (`kavimugil-r/Hibari-Koto1.3.1:29M`).
+
 - `scripts/engine/verify_architecture.py`: architecture and GGUF-provenance verification of trained
   checkpoints (see doc 15); run on Koto 1.0.0, 1.1.0, 1.2.0 and 1.3.0 and their nine F32/F16 GGUFs.
 - `tests/test_architecture_invariants.py` (47 tests): causality, KV cache, RoPE relative-position and

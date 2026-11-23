@@ -178,3 +178,14 @@ def test_export_with_no_variant_produced_is_an_export_error(tmp_path, monkeypatc
     with pytest.raises(export_script.ExportError, match="no GGUF"):
         export_script.export_profile(prof, ["q8_0"], None, force=False)
     assert not (tmp_path / "gguf" / "Modelfile").exists()
+
+
+def test_profile_ollama_name_is_used_in_the_modelfile(tmp_path):
+    # the Modelfile usage line was always hibari-<model>:<version>; a published name needs its own field
+    p = make_repo(tmp_path)
+    assert "ollama create hibari-testy:0.1.1 " in render_modelfile(ModelProfile.load(p, root=tmp_path), "T-F32.gguf")
+    p.write_text(p.read_text() + "ollama_name: someone/Testy0.1.1:7M\n")
+    prof = ModelProfile.load(p, root=tmp_path)
+    assert prof.ollama_name == "someone/Testy0.1.1:7M"
+    mf = render_modelfile(prof, "T-F32.gguf")
+    assert "ollama create someone/Testy0.1.1:7M -f Modelfile" in mf and "ollama run someone/Testy0.1.1:7M" in mf

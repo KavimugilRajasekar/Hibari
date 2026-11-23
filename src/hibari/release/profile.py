@@ -108,6 +108,7 @@ class ModelProfile:
     gguf_files: List[GGUFFile] = field(default_factory=list)
     experiment: Optional[str] = None
     notes: str = ""
+    ollama_name: Optional[str] = None   # published Ollama name, e.g. "user/Model1.0.0:7M"; default hibari-<model>:<version>
     root: Path = field(default_factory=Path.cwd, repr=False)
     source: Optional[Path] = field(default=None, repr=False)
     _inference: Optional[InferenceSettings] = field(default=None, repr=False)
@@ -139,7 +140,7 @@ class ModelProfile:
             checkpoint_sha256=data.get("checkpoint_sha256"), tokenizer_sha256=data.get("tokenizer_sha256"),
             training_status=data.get("training_status", "NOT_STARTED"),
             training_system_prompt=(data.get("training_system_prompt") or None),
-            gguf_dir=gguf.get("dir"), gguf_files=files, experiment=data.get("experiment"), notes=data.get("notes", ""),
+            gguf_dir=gguf.get("dir"), gguf_files=files, experiment=data.get("experiment"), notes=data.get("notes", ""), ollama_name=data.get("ollama_name"),
             root=base, source=path,
         )
 

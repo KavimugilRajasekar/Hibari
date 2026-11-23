@@ -40,7 +40,7 @@ def _num(v: float) -> str:
 
 def render_modelfile(profile: ModelProfile, gguf_file: str) -> str:
     inf = profile.inference
-    tag = f"hibari-{profile.model}:{profile.version}"
+    tag = profile.ollama_name or f"hibari-{profile.model}:{profile.version}"
     lines = [
         f"# {profile.identity.name} {profile.version} — Ollama Modelfile (GENERATED; do not edit by hand)",
         f"# Generated from {profile.source.name if profile.source else 'profile'} by hibari.release.modelfile.",
