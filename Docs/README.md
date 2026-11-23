@@ -22,6 +22,7 @@ shared number sequence (01–34), so each number always means the same topic.
 | [15_API_AND_CLI_REFERENCE.md](15_API_AND_CLI_REFERENCE.md) | API and CLI usage |
 | [20_CHANGELOG.md](20_CHANGELOG.md) | Engine changelog |
 | [decisions/](decisions/README.md) | Architecture Decision Records (ADRs 0001–0005) |
+| [assets/](assets/README.md) | Architecture diagrams (overall model, transformer block, attention, embedding & output) |
 
 ## Official development template (`template/`)
 

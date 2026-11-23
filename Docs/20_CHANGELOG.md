@@ -10,6 +10,10 @@ Model-specific changes to Koto are recorded in `models/Koto/CHANGELOG.md`.
 ### Documentation
 - Koto 1.3.0 (29.4M) recorded as trained by the owner with engine 0.4.0 (`91db4a2`); not evaluated.
   The run's recorded training data does not match the prepared 1.3.0 mix (see `models/Koto/CHANGELOG.md`).
+- Architecture diagrams added in `Docs/assets/` (kebab-case names, indexed in `Docs/assets/README.md`)
+  and embedded in `README.md` and `architecture/04_MODEL_DESIGN.md`; checked against `src/hibari/model/`.
+- `README.md` documentation table and structure tree completed (template 21–25, engine 26–27,
+  architecture 34, Koto 28–33, assets); broken link in `engine/02_PROJECT_GOALS.md` fixed.
 
 ## [0.4.0] — 2026-11-22: GPT-2-informed engineering (branch `feature/koto-1.3.0`)
 

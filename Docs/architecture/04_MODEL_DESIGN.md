@@ -4,6 +4,10 @@
 
 Hibari uses a state-of-the-art **decoder-only Transformer** (LLaMA/Mistral-style) architecture.
 
+![Hibari · Koto overall model architecture](../assets/hibari-koto-overall-architecture.jpeg)
+
+*Drawn for Koto 1.3.0 (29.4M parameters: d_model 512, 8 layers, 8 heads × 64, d_ff 1536). Koto 1.1.x has the same structure at 6.16M parameters (d_model 256, 6 layers, 8 heads × 32, d_ff 768).*
+
 ```
 Input Tokens
      │
@@ -25,10 +29,18 @@ LM Head (Linear Projection / Tied Weights) ──▶ Vocabulary Logits
 ## Architectural Components
 
 ### 1. Embeddings & Positional Encoding
+
+![Embedding and output orchestration with tied weights](../assets/hibari-koto-embedding-and-output.jpeg)
+
 - **Token Embeddings**: Maps discrete token IDs to dense representations ($d_{model} = 256$).
 - **Rotary Position Embeddings (RoPE)**: Encodes relative position directly within self-attention queries and keys ($\theta = 10,000$), rotating **adjacent dimension pairs** $(x_0,x_1),(x_2,x_3),\dots$ (llama.cpp's `ROPE_TYPE_NORM`). The model is trained on 256 positions only; quality beyond 256 tokens is not supported.
 
 ### 2. Transformer Blocks
+
+![Pre-norm transformer block](../assets/hibari-koto-transformer-block.jpeg)
+
+![Multi-head causal self-attention with RoPE](../assets/hibari-koto-attention.jpeg)
+
 Each block implements:
 - **Pre-Normalization**: RMSNorm applied prior to attention and FFN sub-layers for numerical stability.
 - **Multi-Head Self-Attention**: Causal masking to maintain autoregressive order.

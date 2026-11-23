@@ -213,8 +213,12 @@ Hibari/                                          ══ ENGINE REPOSITORY ══
 ├── Docs/                                        ── ENGINE DOCUMENTATION ──
 │   ├── README.md                                Index of all docs (engine + Koto)
 │   ├── engine/                                  01 Overview · 02 Goals · 10 Inference · 11 Memory · 12 Export
+│   │                                            26 Conversational layer · 27 Release profiles and provenance
 │   ├── architecture/                            03 System architecture · 04 Model design · 06 Tokenizer design
+│   │                                            34 GPT-2 reference
 │   ├── decisions/                               ADRs 0001–0005 (PyTorch, from scratch, GGUF, multi-dataset, writing help)
+│   ├── template/                                21–25 Development template, lifecycle, standards, task templates, checklist
+│   ├── assets/                                  Architecture diagrams (overall, transformer block, attention, embedding/output)
 │   ├── 15_API_AND_CLI_REFERENCE.md              Every script flag and the Python API
 │   └── 20_CHANGELOG.md                          Engine changelog
 │
@@ -318,20 +322,22 @@ Status reflects the repository as of 2026-11-21.
 Documentation is split the same way as the code: **how the engine works**
 lives in this repository under `Docs/`, and **how the Koto model is built,
 trained and evaluated** lives in the Koto submodule under `models/Koto/docs/`.
-Files keep one shared number sequence (01–20) across both places, so a number
+Files keep one shared number sequence (01–34) across both places, so a number
 always means the same topic.
 
 | Where | What it covers | Files |
 |---|---|---|
-| `Docs/engine/` | Project scope and the engine's runtime | [01 Project Overview](Docs/engine/01_PROJECT_OVERVIEW.md), [02 Project Goals](Docs/engine/02_PROJECT_GOALS.md), [10 Inference and Generation](Docs/engine/10_INFERENCE_AND_GENERATION.md), [11 Memory and Context](Docs/engine/11_MEMORY_AND_CONTEXT.md), [12 Model Export and Quantization](Docs/engine/12_MODEL_EXPORT_AND_QUANTIZATION.md) |
-| `Docs/architecture/` | How the model and tokenizer are designed | [03 System Architecture](Docs/architecture/03_SYSTEM_ARCHITECTURE.md), [04 Model Design](Docs/architecture/04_MODEL_DESIGN.md), [06 Tokenizer Design](Docs/architecture/06_TOKENIZER_DESIGN.md) |
+| `Docs/engine/` | Project scope and the engine's runtime | [01 Project Overview](Docs/engine/01_PROJECT_OVERVIEW.md), [02 Project Goals](Docs/engine/02_PROJECT_GOALS.md), [10 Inference and Generation](Docs/engine/10_INFERENCE_AND_GENERATION.md), [11 Memory and Context](Docs/engine/11_MEMORY_AND_CONTEXT.md), [12 Model Export and Quantization](Docs/engine/12_MODEL_EXPORT_AND_QUANTIZATION.md), [26 Conversational Layer](Docs/engine/26_CONVERSATIONAL_LAYER.md), [27 Release Profiles and Provenance](Docs/engine/27_RELEASE_PROFILES_AND_PROVENANCE.md) |
+| `Docs/architecture/` | How the model and tokenizer are designed | [03 System Architecture](Docs/architecture/03_SYSTEM_ARCHITECTURE.md), [04 Model Design](Docs/architecture/04_MODEL_DESIGN.md), [06 Tokenizer Design](Docs/architecture/06_TOKENIZER_DESIGN.md), [34 GPT-2 Reference](Docs/architecture/34_GPT2_REFERENCE.md) |
 | `Docs/decisions/` | Architecture Decision Records — *why* things are the way they are | [ADR index](Docs/decisions/README.md) (0001–0005) |
+| `Docs/template/` | The official development process | [21 Template](Docs/template/21_DEVELOPMENT_TEMPLATE.md), [22 Lifecycle](Docs/template/22_DEVELOPMENT_LIFECYCLE.md), [23 Engineering Standards](Docs/template/23_ENGINEERING_STANDARDS.md), [24 Task Templates](Docs/template/24_DEVELOPMENT_TEMPLATES.md), [25 Checklist](Docs/template/25_DEVELOPMENT_CHECKLIST.md) |
+| `Docs/assets/` | Architecture diagrams | [Asset index](Docs/assets/README.md) |
 | `Docs/` (top level) | References and history | [15 API and CLI Reference](Docs/15_API_AND_CLI_REFERENCE.md), [20 Changelog](Docs/20_CHANGELOG.md), [Docs index](Docs/README.md) |
-| `models/Koto/docs/` | Koto data, training, evaluation, deployment | [05 Data Pipeline](models/Koto/docs/05_DATA_PIPELINE.md), [07 Training Pipeline](models/Koto/docs/07_TRAINING_PIPELINE.md), [08 Fine-Tuning](models/Koto/docs/08_FINE_TUNING.md), [09 Evaluation and Testing](models/Koto/docs/09_EVALUATION_AND_TESTING.md), [13 Ollama Integration](models/Koto/docs/13_OLLAMA_INTEGRATION.md), [14 Configuration Reference](models/Koto/docs/14_CONFIGURATION_REFERENCE.md), [16 Dataset Catalog](models/Koto/docs/16_DATASET_CATALOG.md), [18 Known Limitations](models/Koto/docs/18_KNOWN_LIMITATIONS.md), [19 Koto 1.1.0 Development Report](models/Koto/docs/19_KOTO_1.1.0_DEVELOPMENT_REPORT.md) |
+| `models/Koto/docs/` | Koto data, training, evaluation, deployment | [05 Data Pipeline](models/Koto/docs/05_DATA_PIPELINE.md), [07 Training Pipeline](models/Koto/docs/07_TRAINING_PIPELINE.md), [08 Fine-Tuning](models/Koto/docs/08_FINE_TUNING.md), [09 Evaluation and Testing](models/Koto/docs/09_EVALUATION_AND_TESTING.md), [13 Ollama Integration](models/Koto/docs/13_OLLAMA_INTEGRATION.md), [14 Configuration Reference](models/Koto/docs/14_CONFIGURATION_REFERENCE.md), [16 Dataset Catalog](models/Koto/docs/16_DATASET_CATALOG.md), [18 Known Limitations](models/Koto/docs/18_KNOWN_LIMITATIONS.md), [19 Koto 1.1.0 Development Report](models/Koto/docs/19_KOTO_1.1.0_DEVELOPMENT_REPORT.md), [28 Behaviour Specification](models/Koto/docs/28_BEHAVIOUR_SPECIFICATION.md), [29 Data Standards](models/Koto/docs/29_DATA_STANDARDS.md), [30 Model Template](models/Koto/docs/30_KOTO_MODEL_TEMPLATE.md), [31 Koto 1.1.1 Repair Report](models/Koto/docs/31_KOTO_1.1.1_REPAIR_REPORT.md), [32 Koto 1.2.0 Evaluation](models/Koto/docs/32_KOTO_1.2.0_EVALUATION.md), [33 Koto 1.3.0 Development Report](models/Koto/docs/33_KOTO_1.3.0_DEVELOPMENT_REPORT.md) |
 | `models/Koto/` (top level) | Model identity and history | [17 Model Card](models/Koto/MODEL_CARD.md), [Koto Changelog](models/Koto/CHANGELOG.md), [Koto README](models/Koto/README.md) |
 
 **Where to put a new document:** a change to the `hibari` package goes in
-`Docs/` (engine or architecture); a new design decision gets an ADR in
+`Docs/` (engine or architecture); diagrams go in `Docs/assets/` (kebab-case names, listed in its README); a new design decision gets an ADR in
 `Docs/decisions/`; anything about Koto's data, training runs, evaluation
 results or release goes in `models/Koto/docs/`. Engine changes are logged in
 `Docs/20_CHANGELOG.md`, model changes in `models/Koto/CHANGELOG.md`.
@@ -339,6 +345,10 @@ results or release goes in `models/Koto/docs/`. Engine changes are logged in
 ---
 
 ## Architectural Principles
+
+![Hibari · Koto overall model architecture](Docs/assets/hibari-koto-overall-architecture.jpeg)
+
+*Drawn for Koto 1.3.0 (29.4M parameters: d_model 512, 8 layers, 8 heads × 64, d_ff 1536). Koto 1.1.x has the same structure at 6.16M parameters (d_model 256, 6 layers, 8 heads × 32, d_ff 768).*
 
 ### 1. Pre-RMSNorm
 Standard LayerNorm calculates both the mean and variance across activations, adding unnecessary compute operations. Root Mean Square Normalization preserves scale invariance without mean subtraction:
@@ -351,6 +361,9 @@ RMSNorm(x) = (x / sqrt(mean(x^2) + epsilon)) * gamma
 Instead of adding absolute positional embeddings to token representations, RoPE applies a rotation to pairs of dimensions in query and key vectors proportional to token position. Relative distances between tokens are naturally injected into attention dot products without learned position tables. Hibari rotates adjacent pairs `(x0, x1), (x2, x3), ...`, which is the layout llama.cpp uses for the `llama` architecture, so exported weights need no permutation.
 
 ### 3. Multi-Head Causal Self-Attention
+
+![Hibari · Koto attention architecture](Docs/assets/hibari-koto-attention.jpeg)
+
 Queries, keys, and values are linearly projected across 8 attention heads ($d_k = 32$). A causal mask prevents tokens from attending to later tokens. During generation a KV cache stores past keys and values, so each new token costs one forward step instead of re-running the whole sequence:
 
 ```
@@ -358,6 +371,9 @@ Attention(Q, K, V) = softmax((Q K^T) / sqrt(d_k) + M_causal) V
 ```
 
 ### 4. SwiGLU Feed-Forward Network
+
+![Hibari · Koto transformer block: pre-RMSNorm attention and SwiGLU with residuals](Docs/assets/hibari-koto-transformer-block.jpeg)
+
 SwiGLU replaces traditional two-layer feed-forward networks with gated linear units driven by the Swish (SiLU) activation function:
 
 ```
@@ -365,6 +381,9 @@ SwiGLU(x) = (SiLU(x W_gate) * (x W_up)) W_down
 ```
 
 ### 5. Weight Tying
+
+![Hibari · Koto embedding and output orchestration with tied weights](Docs/assets/hibari-koto-embedding-and-output.jpeg)
+
 To minimize memory usage and parameter count on edge devices, the output projection matrix (`lm_head.weight`) shares parameters directly with the input embedding table (`embed_tokens.embedding.weight`).
 
 ---
