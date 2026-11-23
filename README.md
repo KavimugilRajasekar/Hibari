@@ -7,7 +7,7 @@
 **A Purpose-Built Cognitive LLM Architecture & Language Model Built from Scratch**
 
 Author: **[Kavimugil Rajasekar](https://kavimugilrajasekar.github.io)**  
-[GitHub](https://github.com/KavimugilRajasekar) | [Portfolio](https://kavimugilrajasekar.github.io) | [Repository](https://github.com/KavimugilRajasekar/Hibari)
+[GitHub](https://github.com/KavimugilRajasekar) | [Hugging Face](https://huggingface.co/kavimugil-r) | [Ollama](https://ollama.com/kavimugil-r) | [Portfolio](https://kavimugilrajasekar.github.io) | [Repository](https://github.com/KavimugilRajasekar/Hibari)
 
 </div>
 
@@ -527,5 +527,7 @@ Current results: **247 passed** (engine) and **59 passed** (Koto).
 
 - Author: **Kavimugil Rajasekar**
 - GitHub: [@KavimugilRajasekar](https://github.com/KavimugilRajasekar)
+- Hugging Face: [kavimugil-r](https://huggingface.co/kavimugil-r)
+- Ollama: [kavimugil-r](https://ollama.com/kavimugil-r)
 - Portfolio: [https://kavimugilrajasekar.github.io](https://kavimugilrajasekar.github.io)
 - Repository: [https://github.com/KavimugilRajasekar/Hibari](https://github.com/KavimugilRajasekar/Hibari)
