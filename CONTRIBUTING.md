@@ -34,13 +34,19 @@ Hibari is an open-source cognitive LLM architecture and language model project d
 
 ---
 
+## Development process
+
+Follow the Official Hibari Development Template (`Docs/template/21_DEVELOPMENT_TEMPLATE.md`):
+the lifecycle (22), the standards (23), and the checklist (25) in every pull request.
+Never start a training run from automation; training is authorised and run by the owner.
+
 ## Code Guidelines
 
 - Adhere to PEP 8 standards.
 - Use explicit type annotations for function signatures.
 - Write docstrings for all modules, classes, and public functions.
 - Do not add emoji characters in markdown files, docstrings, or console logs.
-- Write automated tests in `hibari/tests/` for any new models, transforms, or tools.
+- Write automated tests in `tests/` (engine) or `models/Koto/tests/` (Koto) for any new models, transforms, or tools.
 
 ---
 

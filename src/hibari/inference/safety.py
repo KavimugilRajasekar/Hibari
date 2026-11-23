@@ -96,6 +96,9 @@ _SHORTHAND = [
     (r"\bgotta\b", "got to"),
     (r"\bim\b", "i am"),
     (r"\bi'm\b", "i am"),
+    # without these, "i'll hurt him" / "i'd kill him" never reached the "i will" / "i would" patterns
+    (r"\bi'll\b", "i will"),
+    (r"\bi'd\b", "i would"),
     (r"\bu\b", "you"),
     (r"\bur\b", "your"),
     (r"\bmyslef\b", "myself"),
@@ -166,7 +169,7 @@ _SELF_HARM_PATTERNS = [
 _VIOLENCE_PATTERNS = [
     # explicit intent + violent verb (+ optional object)
     _INTENT + r" " + _VIOLENT_VERB + r"\b",
-    r"\bi(?: am| will|'ll| want to)? (?:kill|murder|stab|shoot) (?:you|him|her|them|everyone|somebody|someone|people|my \w+)\b",
+    r"\bi(?: am| will|'ll| would| want to)? (?:kill|murder|stab|shoot) (?:you|him|her|them|everyone|somebody|someone|people|my \w+)\b",
     r"\bi am going to make (?:him|her|them) pay\b",
     r"\b(?:bring|take) a (?:gun|knife) to (?:school|work|class)\b",
 ]
@@ -193,6 +196,7 @@ _BENIGN_IDIOMS = [
     # negated intent: "i don't want to hurt you", "i would never kill anyone"
     r"\b(?:don't|do not|never|wouldn't|would never|not) (?:want to |going to |try to |mean to )?" + _VIOLENT_VERB + r"\b\s*\w*",
     r"\bhurt (?:your|his|her|their|my) feelings\b",
+    r"\bshoot (?:you|me|him|her|them|us) (?:a |an )?(?:quick )?(?:message|text|email|e mail|mail|line|dm|note|reply)\b",
 ]
 
 

@@ -26,4 +26,4 @@
 
 ---
 
-*See [03_SYSTEM_ARCHITECTURE.md](03_SYSTEM_ARCHITECTURE.md) for the architecture.*
+*See [03_SYSTEM_ARCHITECTURE.md](../architecture/03_SYSTEM_ARCHITECTURE.md) for the architecture.*

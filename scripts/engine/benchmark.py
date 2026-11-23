@@ -116,7 +116,7 @@ def bench_torch(ckpt: str, tok_dir: str, threads: int) -> dict:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--checkpoint", required=True)
-    ap.add_argument("--tokenizer-dir", default="hibari/models/tokenizer")
+    ap.add_argument("--tokenizer-dir", default="models/Koto/tokenizer")
     ap.add_argument("--gguf", nargs="+", required=True)
     ap.add_argument("--llama-bin", required=True)
     ap.add_argument("--threads", type=int, default=4)
@@ -132,7 +132,7 @@ def main():
         print(json.dumps({k: v for k, v in r.items() if k != "sample_output"}))
         res["gguf"].append(r)
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
-    Path(a.out).write_text(json.dumps(res, indent=2, ensure_ascii=False))
+    Path(a.out).write_text(json.dumps(res, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Wrote {a.out}")
 
 

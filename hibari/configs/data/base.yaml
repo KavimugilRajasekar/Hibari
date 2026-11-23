@@ -1,5 +1,16 @@
-# Hibari — Data Pipeline Config
-raw_dir: hibari/data/raw
-processed_dir: hibari/data/processed
-tokenizer_path: hibari/models/pretrained/tokenizer.json
-max_sequence_length: 2048
+# TEMPLATE — data pipeline settings. The pipeline itself (sources, mixing,
+# leak filtering) belongs to the model repository (e.g. Koto scripts/build_mix.py);
+# these are the keys every Hibari model's data config must define.
+experiment: EXP-XXXX
+out_dir: data/processed_X.Y.Z   # must not exist yet (no accidental overwrite)
+tokenizer_dir: tokenizer
+max_seq_len: 256                # = model max_seq_len; longer examples are dropped, never cut mid-reply
+system_prompt: >-               # every example gets exactly this prompt (= release profile system_prompt)
+  You are <Name>, ...
+val_pct: 4                      # stable hash split: one source text is never in two splits
+test_pct: 4
+seed: 0
+# leak prevention: every evaluation prompt is removed from training data
+# tokenizer: byte-level BPE, 7 special tokens (hibari.data.tokenizer.SPECIAL_TOKENS)
+vocab_size: 4096
+min_frequency: 2

@@ -1,6 +1,201 @@
 # 20 — Changelog
 
 All notable changes to the Hibari conversational language model project are documented in this file.
+Model-specific changes to Koto are recorded in `models/Koto/CHANGELOG.md`.
+
+---
+
+## [0.4.1] — 2026-11-23: fixes from the Koto 1.3.0 release
+
+### Added
+- `ModelConfig.resid_dropout` (default 0.0): dropout on each sub-layer output before the residual
+  add. No parameters, so checkpoints and GGUF exports are unchanged; old models behave identically
+  (PyTorch outputs of 1.3.0 verified identical, 11/11).
+
+- Release profiles may set `ollama_name` (the published Ollama model name); `render_modelfile` uses it
+  in the Modelfile's `ollama create` / `ollama run` lines. Default unchanged (`hibari-<model>:<version>`).
+  Used by Koto 1.3.1 (`kavimugil-r/Hibari-Koto1.3.1:29M`).
+
+- `scripts/engine/verify_architecture.py`: architecture and GGUF-provenance verification of trained
+  checkpoints (see doc 15); run on Koto 1.0.0, 1.1.0, 1.2.0 and 1.3.0 and their nine F32/F16 GGUFs.
+- `tests/test_architecture_invariants.py` (47 tests): causality, KV cache, RoPE relative-position and
+  extension, RMSNorm, loss masking, `HibariKotoLM.generate`, `generate_batch` rows that stop early,
+  `evaluate_records`, `InferenceEngine`, checkpoints, `ModelConfig` errors, quantization helpers and the
+  NumPy GGUF reference runtime (which no test or script used before). Engine line coverage 83.1% → 88.3%
+  (stdlib `sys.monitoring` measurement; no new dependency).
+
+### Fixed
+- `load_checkpoint` returns the model in eval mode. With `resid_dropout` > 0 a train-mode model gave a
+  different answer on every call (scripts that use the loaded model directly, e.g. `verify_gguf.py`).
+- Release validation no longer reports "checkpoint vs config differ" for a checkpoint saved before
+  a `ModelConfig` field existed; the missing field is compared as its default.
+- `compare_backends.py`: `llama-completion -n k` prints k-1 tokens; the script now requests n+1 and
+  compares both backends at n tokens (1.3.0 F32 parity 9/11 → 11/11).
+- Safety layer: `i'll` / `i'd` are expanded before matching, so "I'll hurt him", "I'll beat up my
+  brother" and "I'd kill him" are flagged as violence (they were not); "I'll shoot you a message" is
+  no longer flagged. Detection only; the reviewed safety responses are unchanged.
+- Reply critic: `topic_from_nowhere` and `unknown_entities` match whole words ("war" is not mentioned
+  by "award", "Sam" not by "same"); `topic_from_nowhere` no longer depends on which topic word comes
+  first in the reply.
+- `HibariChatSession.build_prompt_ids` reserves the same room for the reply as generation
+  (`reply_reserve`: `max_new_tokens`, at most half the window). It reserved the full `max_new_tokens`,
+  so e-mail requests (160 new tokens in a 256 window) lost the start of a long message, the
+  instruction included, and `max_new_tokens` >= the window gave a zero or negative budget.
+- `validate_profile(modelfile_variant=<unknown>)` and `export.py --profile` with no variant produced
+  report an error instead of raising a bare `StopIteration`.
+
+
+### Documentation
+- Koto 1.3.0 (29.4M) recorded as trained by the owner with engine 0.4.0 (`91db4a2`); evaluated, not accepted.
+  The run's recorded training data does not match the prepared 1.3.0 mix (see `models/Koto/CHANGELOG.md`).
+- Architecture diagrams added in `Docs/assets/` (kebab-case names, indexed in `Docs/assets/README.md`)
+  and embedded in `README.md` and `architecture/04_MODEL_DESIGN.md`; checked against `src/hibari/model/`.
+- `README.md` documentation table and structure tree completed (template 21–25, engine 26–27,
+  architecture 34, Koto 28–33, assets); broken link in `engine/02_PROJECT_GOALS.md` fixed.
+
+## [0.4.0] — 2026-11-22: GPT-2-informed engineering (branch `feature/koto-1.3.0`)
+
+GPT-2 studied as an engineering reference: `architecture/34_GPT2_REFERENCE.md`. Architecture,
+tokenizer IDs and checkpoints unchanged (Koto: 6,163,712 parameters).
+
+### Added
+- `generate_batch` — N continuations of one prompt in a single batch (prompt prefilled once,
+  per-row decoding and seeds); identical to sequential generation on the 1.1.1 model (16/16),
+  4.4× faster. `HibariChatSession` candidate reranking uses it (~0.4 s per turn).
+- `stream_text` and `generate.py --stream` — streaming that never shows half a UTF-8 character.
+- `hibari.data.bpe_reference.ReferenceBPE` — independent GPT-2-algorithm BPE; agrees with the
+  production tokenizer on 19,552/19,552 validation messages. Found that NFKC makes Python and
+  llama.cpp tokenise compatibility characters differently (documented, not changed).
+- `hibari.data.pipeline` — `validate_conversation`, `deduplicate`, `QualityFilter`,
+  `stable_split` (identical to Koto's `split_of`), `conversation_stats`.
+- `hibari.evaluation.evaluate_records` — token-weighted loss / perplexity overall and per source
+  (was a stub; Koto's runner now uses it and reproduces the published 1.1.0 losses exactly).
+- `ModelConfig.validate()` (runs on construction) and `ModelConfig.from_dict_strict`.
+- `Trainer(resume_from=...)` / Koto `train.py --resume`: restores weights, optimizer,
+  scheduler, step, best result and history, and fast-forwards the data stream.
+- Message analysis: `DISAGREEMENT`, `REPAIR`, `TOPIC_CHANGE` intents; past-tense bad days,
+  lost objects, "don't know what to do"; critic rules for them, for condolences without a
+  loss and for cheerful replies to insults. Router: "rewrite this in a polite way".
+
+### Fixed
+- `pyproject.toml` did not declare `tokenizers` and `gguf` although `import hibari` needs both
+  (`tests/test_packaging.py` checks every third-party import is declared).
+- `TrainingArgs.output_dir` default pointed at the removed `hibari/models/checkpoints`.
+
+### Kept on purpose
+- `HibariKotoLM.generate` (uncached, sliding window) remains as the reference implementation that
+  the KV-cache tests compare against; it has a tested contract the cached path does not have.
+- Placeholder modules `hibari.memory.{store,retrieval,context}`, `hibari.personality.*`,
+  `hibari.utils.*`, `evaluation.benchmarks`, `export.checkpoint_export`, `data.preprocessing`,
+  `training.fine_tuning` (LoRA) are still stubs; nothing imports them. Model-specific
+  conversation configuration is provided by `hibari.release.ModelProfile` + `InferenceSettings`.
+
+## [0.3.1] — 2026-11-22: Analyzer and critic fixes from the owner's Ollama chat
+
+### Fixed (regression tests `tests/test_conversational_layer.py::test_o1…o5`)
+- "ur really a bad guy", "you're the worst bot" were not recognised as hostile.
+- Short low-mood replies ("bad thats all", "meh") were not recognised as feelings.
+- "say my name?" when no name was given: replies that answer with Koto's own identity
+  are now penalised; "you haven't told me" is preferred (`MessageAnalysis.asks_user_fact`).
+- A reply identical to one of Koto's previous replies is penalised (`repeats_previous_reply`).
+- Third-party sympathy ("someone close to you", "for them") is penalised when the
+  user mentioned no third person.
+No false positives on "not bad thanks", "bad weather today", "that movie was bad".
+- `Trainer(path_root=...)` and Koto `train.py` record repo-relative paths in
+  `training_history.json` and the run metadata (they used to contain absolute local paths).
+  Test: `tests/test_regressions.py::test_t4_history_paths_relative_to_root`.
+
+## [0.3.0] — 2026-11-22: Conversational layer, release profiles, development template
+
+### Added
+- `hibari.inference.intent` (message analysis), `hibari.inference.normalization`
+  (informal input), `hibari.inference.reranking` (candidate scoring: fluency, PMI
+  relevance, named critic rules). `HibariChatSession` options `normalize_input`,
+  `num_candidates`, `intent_candidates`, `candidate_sampling`, `identity_terms`,
+  `last_reply_info`; defaults leave the old path unchanged. See `engine/26_CONVERSATIONAL_LAYER.md`.
+- `hibari.release`: `ModelProfile`, `InferenceSettings`, `validate_profile`,
+  `render_modelfile`; `InferenceEngine.from_profile`. See `engine/27_RELEASE_PROFILES_AND_PROVENANCE.md`.
+- GGUF export: `system_prompt` and `hibari.*` provenance metadata; `build_chat_template`.
+- Scripts: `export.py --profile/--record/--force` (no silent replacement),
+  `validate_release.py`, `validate_experiments.py`, `compare_backends.py`,
+  `generate.py --profile/--raw/--explain`.
+- More rewrite phrasings ("rewrite this properly", "improve this", "make this better").
+- Development template: `template/21–25`, validated config templates in `hibari/configs/`
+  (model, data, training, sft, inference, release, experiment).
+- Tests: `tests/test_conversational_layer.py`, `tests/test_release.py` (311 tests in total).
+
+### Fixed
+- Engine config templates used keys no code reads (`context_length`, `embedding_dim`, `use_lora`, …).
+- `generate.py` / `export.py` defaulted to the 1.0.0 checkpoint and to `general.version 2.0`.
+
+## [0.2.0] — 2026-11-21: Rewriting tasks, n-gram blocking, gradient accumulation (branch `feature/koto-1.1.0`)
+
+### Added
+- **`hibari.inference.tasks`** — one task representation for training and
+  inference (`Task: <label>\nInput: <text>`, reply = rewritten text only) for
+  `rephrase`, `correct_grammar`, `formal`, `casual`, `shorten`, `simplify`,
+  `polite`; `parse_task_request` for explicit requests typed in chat;
+  `TASK_DECODING`; protected-term (numbers, times, names, technical tokens)
+  preservation checks.
+- **`HibariChatSession.run_task` / `InferenceEngine.rewrite`** returning a
+  `TaskResult`; `reply()` routes recognised rewrite requests (`route_tasks`).
+  Rewrites use only the system prompt + request, deterministic decoding,
+  seeded retries when a protected term is dropped, sentence chunking for
+  input longer than the context window, fixed replies for empty / too-long
+  input; the safety layer still checks rewrite input.
+- **`no_repeat_ngram_size`** in `sample_next_token` / `generate_tokens` /
+  `generate_text` / `InferenceEngine.generate` (default 0 = unchanged).
+- `HibariChatSession.last_stopped_on_eos`.
+- **`hibari.evaluation.metrics`** (was a stub): repetition, repeated sentence,
+  distinct-n, grammar heuristic, echo ratio, chrF-style character F-score,
+  length ratio, lead / self-introduction / AI-disclaimer detectors.
+- **`TrainingArgs.gradient_accumulation_steps`** (default 1 = unchanged);
+  verified to match a full-batch step exactly.
+- Tests: `tests/test_tasks.py`, `tests/test_metrics.py` (237 tests in total).
+
+### Fixed (2026-11-22, code review; regression tests in `tests/test_regressions.py`)
+- **Special-token injection**: message text containing `<|assistant|>`,
+  `<|eos|>` etc. was encoded as real control tokens, letting a user forge
+  turns. `escape_special_tokens()` now neutralises them in
+  `apply_chat_template` (training data contains none, so training is unchanged).
+- `HibariChatSession.reset()` keeps the constructor's system prompt
+  (`base_system_prompt`) instead of reverting to the default.
+- `generate_tokens(..., stats=)` reports `stop_reason` (`stop_token`,
+  `max_new_tokens`, `context_full`); `last_stopped_on_eos` no longer claims
+  EOS when the context window filled.
+- The over-long-message fallback keeps the `<|user|>` and `<|assistant|>` headers.
+- Gradient accumulation is token-weighted (equal to a full-batch step for
+  any token counts); skipped non-finite micro-batches are re-weighted;
+  `max_nonfinite_steps` (default 10) stops a run that would otherwise loop forever.
+- `ConversationDataset` truncates over-long conversations after the last
+  complete assistant turn, so no kept reply loses its `<|eos|>`.
+- Tests: 247 (10 new).
+
+### Documentation and layout (2026-11-21)
+- **Root `README.md` rewritten** to match the repository: engine / model
+  split and the one-way Koto → Hibari dependency, package responsibilities,
+  data-flow diagrams, a file-by-file project structure (placeholders and
+  local-only folders marked), a structuring plan (phases A–E), a
+  documentation map, and a Quick Start with working paths. Headline metrics
+  corrected to the 1.0.0 checkpoint (val loss 3.038 / ppl 20.86); test count
+  corrected (237 engine + 58 Koto).
+- `Docs/README.md` index links fixed (files are in `engine/`,
+  `architecture/` and the Koto submodule); `hibari/README.md` now describes
+  only the base configs and where everything else moved;
+  `Docs/15_API_AND_CLI_REFERENCE.md` rewritten for `scripts/engine/` and the
+  Koto scripts; stale `hibari/scripts/…`, `hibari/models/…` paths replaced
+  in the engine and Koto docs (changelogs and ADRs are left as historical
+  records).
+- **`scripts/engine/*` defaults** now point at `models/Koto/checkpoints/…`,
+  `models/Koto/tokenizer` and `models/Koto/releases/exported` (the old
+  `hibari/models/…` defaults no longer existed).
+
+### Fixed
+- `tests/test_model.py` looked for `configs/model/koto.yaml` in the engine
+  repository; the config moved to the Koto submodule. The tests now read
+  `models/Koto/configs/model/koto.yaml` and are skipped without the submodule.
+- A rewrite request longer than the context window was left-truncated
+  through its `Task:` header; it is now split at sentence boundaries.
 
 ---
 

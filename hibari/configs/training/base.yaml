@@ -1,12 +1,26 @@
-# Hibari — Base Training Config
-learning_rate: 3.0e-4
-min_lr: 3.0e-5
-warmup_steps: 1000
-max_steps: 100000
+# TEMPLATE — full training run from scratch (hibari.training.trainer.TrainingArgs
+# plus the model-repository keys marked [repo]). Training is a controlled stage:
+# never start it from automation; record it in an experiment file first
+# (training_status: MANUALLY_AUTHORIZED).
+experiment: EXP-XXXX            # [repo] experiment id (experiments/EXP-XXXX.yaml)
+model_version: 0.0.0            # [repo] version of the weights this run produces
+data_cache_dir: data/processed_X.Y.Z   # [repo] built by the data pipeline
+val_examples: 5000              # [repo] cap on validation examples
+learning_rate: 1.0e-3
+min_lr_ratio: 0.1
+weight_decay: 0.1
+warmup_steps: 500
+max_steps: 12000
 batch_size: 32
-gradient_accumulation_steps: 1
+gradient_accumulation_steps: 1  # loss is token-weighted across micro-batches
 gradient_clip: 1.0
-checkpoint_every: 5000
-log_every: 100
+checkpoint_every: 1000
 eval_every: 1000
+log_every: 100
+output_dir: checkpoints/<model>_X.Y.Z   # fresh directory per run
+save_best: true
+overwrite_output_dir: false     # the trainer refuses to replace best_model.pt
+early_stopping_patience: 4
+max_hours: 6.0
+max_nonfinite_steps: 10
 seed: 42

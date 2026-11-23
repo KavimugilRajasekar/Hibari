@@ -62,7 +62,7 @@ When generating, `add_generation_prompt=True` appends `<|assistant|>\n`, prompti
 
 | Item | Value |
 |---|---|
-| Library | Hugging Face `tokenizers` BPE (`hibari/models/tokenizer/tokenizer.json`) |
+| Library | Hugging Face `tokenizers` BPE (`models/Koto/tokenizer/tokenizer.json`) |
 | Normaliser | NFKC |
 | Pre-tokenizer | ByteLevel, `add_prefix_space=false`, GPT-2 split regex |
 | Decoder | ByteLevel |
@@ -82,4 +82,4 @@ for all 12 cases in `scripts/verify_gguf.py` (the v1 export, which declared
 only compatibility characters can tokenize differently there.
 
 The tokenizer was **not** retrained for v2–v6, so token IDs are unchanged
-and every Koto checkpoint shares `hibari/models/tokenizer/`.
+and every Koto checkpoint shares `models/Koto/tokenizer/`.

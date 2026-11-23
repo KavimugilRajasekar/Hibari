@@ -13,6 +13,15 @@ Fixes over the original loop (see Docs/07_TRAINING_PIPELINE.md):
 * Training history and the run configuration are written to
   ``<output_dir>/training_history.json``.
 * Wall-clock time limit (``max_hours``) for CPU budgets.
+* Optional gradient accumulation (``gradient_accumulation_steps``): each
+  optimizer step averages the gradients of N micro-batches, so the effective
+  batch is ``batch_size * N`` without the memory cost. ``max_steps`` counts
+  optimizer steps. The default of 1 is the original behaviour. Micro-batches
+  are weighted by their number of supervised tokens, so the step equals a
+  full-batch step even when micro-batches have different token counts.
+* A micro-batch with a non-finite loss is skipped and the remaining ones are
+  re-weighted; ``max_nonfinite_steps`` consecutive steps with no usable
+  micro-batch stop the run with an error instead of looping forever.
 """
 
 from __future__ import annotations
@@ -47,13 +56,15 @@ class TrainingArgs:
     checkpoint_every: int = 200
     eval_every: int = 100
     log_every: int = 20
-    output_dir: str = "hibari/models/checkpoints"
+    output_dir: str = "checkpoints/run"
     save_best: bool = True
     seed: int = 42
     min_lr_ratio: float = 0.1
     max_hours: float = 0.0
     overwrite_output_dir: bool = False
     early_stopping_patience: int = 0  # evals without improvement; 0 = disabled
+    gradient_accumulation_steps: int = 1
+    max_nonfinite_steps: int = 10  # consecutive all-non-finite steps before aborting
 
 
 def evaluate_loss(model: HibariKotoLM, dataloader: DataLoader, device: torch.device) -> Dict[str, float]:
@@ -88,8 +99,19 @@ class Trainer:
         args: Optional[TrainingArgs] = None,
         device: str | torch.device = "cpu",
         run_metadata: Optional[Dict[str, Any]] = None,
+        path_root: Optional[str | Path] = None,
+        resume_from: Optional[str | Path] = None,
     ):
+        """``path_root``: when given, paths under it are written relative to it in
+        ``training_history.json`` (the file is committed; it must not contain local paths)."""
         self.model = model.to(device)
+        self.path_root = Path(path_root).resolve() if path_root else None
+        # resume_from: a last_checkpoint.pt written by this trainer; model, optimizer,
+        # scheduler, step, best result and history are restored and training continues
+        # to max_steps. The data stream is fast-forwarded past the batches already
+        # used, so a resumed run sees the same batches as an uninterrupted one
+        # (given the same loader / sampler seed).
+        self.resume_from = Path(resume_from) if resume_from else None
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.train_dataloader = train_dataloader
@@ -102,6 +124,7 @@ class Trainer:
             self.args.save_best
             and (self.output_dir / "best_model.pt").exists()
             and not self.args.overwrite_output_dir
+            and self.resume_from is None
         ):
             raise FileExistsError(
                 f"{self.output_dir}/best_model.pt already exists. Use a new output_dir "
@@ -115,43 +138,106 @@ class Trainer:
         return evaluate_loss(self.model, self.val_dataloader, self.device)
 
     def _write_history(self, history: List[Dict[str, Any]], best: Dict[str, Any]) -> None:
+        args = asdict(self.args)
+        if self.path_root is not None:
+            try:
+                args["output_dir"] = str(Path(args["output_dir"]).resolve().relative_to(self.path_root))
+            except ValueError:
+                pass
         with open(self.output_dir / "training_history.json", "w", encoding="utf-8") as f:
             json.dump(
-                {"args": asdict(self.args), "metadata": self.run_metadata, "best": best, "history": history},
+                {"args": args, "metadata": self.run_metadata, "best": best, "history": history},
                 f, indent=2,
             )
+
+    def _restore(self, path: Path):
+        ck = torch.load(path, map_location=self.device, weights_only=False)
+        if "optimizer_state_dict" not in ck:
+            raise ValueError(f"{path} has no optimizer state; resume needs a last_checkpoint.pt")
+        self.model.load_state_dict(ck["model_state_dict"])
+        self.optimizer.load_state_dict(ck["optimizer_state_dict"])
+        if self.scheduler is not None and ck.get("scheduler_state_dict") is not None:
+            self.scheduler.load_state_dict(ck["scheduler_state_dict"])
+        step = int(ck.get("step", 0))
+        history, best = [], {"eval_loss": float("inf"), "step": 0}
+        hist_file = self.output_dir / "training_history.json"
+        if hist_file.exists():
+            h = json.loads(hist_file.read_text(encoding="utf-8"))
+            history = [r for r in h.get("history", []) if r.get("step", 0) <= step]
+            b = h.get("best") or {}
+            if "eval_loss" in b and b.get("step", 0) <= step:
+                best = {k: b[k] for k in ("eval_loss", "eval_perplexity", "step") if k in b}
+        if step >= self.args.max_steps:
+            raise ValueError(f"checkpoint is at step {step}, max_steps is {self.args.max_steps}: nothing to resume")
+        return step, history, best
 
     def train(self) -> Dict[str, Any]:
         self.model.train()
         history: List[Dict[str, Any]] = []
         best: Dict[str, Any] = {"eval_loss": float("inf"), "step": 0}
         step = 0
+        if self.resume_from is not None:
+            step, history, best = self._restore(self.resume_from)
         window_loss, window_steps = 0.0, 0
         last_train_loss = float("nan")
         evals_without_improvement = 0
         t0 = time.time()
 
         model_desc = getattr(self.model.config, "model_name", "Hibari-Koto")
-        pbar = tqdm(total=self.args.max_steps, desc=f"Training {model_desc}", mininterval=5)
+        pbar = tqdm(total=self.args.max_steps, initial=step, desc=f"Training {model_desc}", mininterval=5)
         train_iter = iter(self.train_dataloader)
         stop_reason = "max_steps"
 
-        while step < self.args.max_steps:
+        accum = max(1, int(self.args.gradient_accumulation_steps))
+
+        def next_batch():
+            nonlocal train_iter
             try:
-                batch = next(train_iter)
+                return next(train_iter)
             except StopIteration:
                 train_iter = iter(self.train_dataloader)
-                batch = next(train_iter)
+                return next(train_iter)
 
-            input_ids = batch["input_ids"].to(self.device)
-            targets = batch["targets"].to(self.device)
+        if step:  # resumed: skip the micro-batches the interrupted run already consumed
+            for _ in range(step * accum):
+                next_batch()
 
+        nonfinite_steps = 0
+        while step < self.args.max_steps:
             self.optimizer.zero_grad(set_to_none=True)
-            _, loss, _ = self.model(input_ids, targets=targets)
-            if loss is None or not torch.isfinite(loss):
-                pbar.write(f"Skipping non-finite loss at step {step}")
+            micro = [next_batch() for _ in range(accum)]
+            n_tok = [int((b["targets"] != -100).sum().item()) for b in micro]
+            total_tok = max(1, sum(n_tok))
+            micro_losses: List[float] = []
+            used_tok = 0
+            for batch, n in zip(micro, n_tok):
+                if n == 0:
+                    continue
+                input_ids = batch["input_ids"].to(self.device)
+                targets = batch["targets"].to(self.device)
+                _, loss, _ = self.model(input_ids, targets=targets)
+                if loss is None or not torch.isfinite(loss):
+                    pbar.write(f"Skipping non-finite loss at step {step}")
+                    continue
+                # loss is the mean over this micro-batch's n tokens; weighting by
+                # n / total gives the mean over all tokens of the step
+                (loss * (n / total_tok)).backward()
+                micro_losses.append(loss.item())
+                used_tok += n
+            if not micro_losses:
+                nonfinite_steps += 1
+                if nonfinite_steps >= self.args.max_nonfinite_steps:
+                    raise RuntimeError(
+                        f"{nonfinite_steps} consecutive steps had no finite loss (step {step}); "
+                        "check the learning rate and the data."
+                    )
                 continue
-            loss.backward()
+            nonfinite_steps = 0
+            if used_tok < total_tok:  # some micro-batches were skipped: re-normalise
+                scale = total_tok / used_tok
+                for p in self.model.parameters():
+                    if p.grad is not None:
+                        p.grad.mul_(scale)
             grad_norm = None
             if self.args.gradient_clip > 0:
                 grad_norm = float(torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.gradient_clip))
@@ -160,7 +246,7 @@ class Trainer:
                 self.scheduler.step()
 
             step += 1
-            window_loss += loss.item()
+            window_loss += sum(micro_losses) / len(micro_losses)
             window_steps += 1
             pbar.update(1)
 

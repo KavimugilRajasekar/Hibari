@@ -1,0 +1,30 @@
+# TEMPLATE — experiment record (<model repo>/experiments/EXP-XXXX.yaml).
+# Checked by scripts/engine/validate_experiments.py. Training-related work may
+# only run when training.status is MANUALLY_AUTHORIZED (set by the owner).
+id: EXP-XXXX
+model: <model>
+model_version: 0.0.0
+date: YYYY-MM-DD
+objective: >-
+  What should be better after this experiment, in one or two sentences.
+problem: >-
+  The observed failure, with a reproducible example.
+source_changes:            # files changed in either repository
+  - repo: hibari|<model>
+    files: []
+datasets: []               # data configs / processed directories used
+configs: []                # model / training / inference / release configs
+checkpoint: null           # checkpoint produced or used (path + sha256)
+training:
+  status: NOT_STARTED      # NOT_STARTED | NOT_REQUIRED | MANUALLY_AUTHORIZED | COMPLETED
+  authorized_by: null
+  config: null
+evaluation:
+  methodology: []          # suites, pipelines, seeds, backends
+  reports: []              # paths to reports
+results: {}                # headline numbers, copied from the reports
+failures: []               # remaining failures, with examples
+improvements: []
+limitations: []
+conclusion: >-
+  Decision taken and why.

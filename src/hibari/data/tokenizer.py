@@ -1,6 +1,7 @@
 """Tokenizer implementation for Hibari models."""
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Union
 
@@ -18,6 +19,20 @@ SPECIAL_TOKENS = [
     "<|user|>",
     "<|assistant|>",
 ]
+
+
+_SPECIAL_RE = re.compile(r"<\|(" + "|".join(t[2:-2] for t in SPECIAL_TOKENS) + r")\|>")
+
+
+def escape_special_tokens(text: str) -> str:
+    """Neutralise special-token strings inside message content.
+
+    ``"<|assistant|>"`` typed by a user would otherwise be encoded as the real
+    control token, letting the user forge turns or end the reply. It becomes
+    ``"<assistant>"`` (ordinary text). Training data contains no such
+    strings, so training prompts are unchanged.
+    """
+    return _SPECIAL_RE.sub(r"<\1>", text)
 
 
 class HibariTokenizer:
@@ -120,7 +135,7 @@ class HibariTokenizer:
         formatted = ""
         for msg in messages:
             role = msg.get("role", "user")
-            content = msg.get("content", "").strip()
+            content = escape_special_tokens(msg.get("content", "").strip())
             if role == "system":
                 formatted += f"<|system|>\n{content}<|eos|>\n"
             elif role == "user":
